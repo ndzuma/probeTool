@@ -14,9 +14,10 @@ import (
 )
 
 var (
-	fullFlag  bool
-	quickFlag bool
-	modelFlag string
+	fullFlag    bool
+	quickFlag   bool
+	modelFlag   string
+	verboseFlag bool
 )
 
 var rootCmd = &cobra.Command{
@@ -32,6 +33,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&fullFlag, "full", false, "Run a full probe (default)")
 	rootCmd.Flags().BoolVar(&quickFlag, "quick", false, "Run a quick probe")
 	rootCmd.Flags().StringVar(&modelFlag, "model", "", "Override the default model")
+	rootCmd.Flags().BoolVarP(&verboseFlag, "verbose", "v", false, "Enable verbose output")
 
 	// Make --full the default if no other flag is set
 	rootCmd.PreRun = func(cmd *cobra.Command, args []string) {
@@ -80,8 +82,9 @@ func runProbe() {
 
 	// Run probe with new API
 	args := prober.ProbeArgs{
-		Type:  probeType,
-		Model: modelFlag,
+		Type:    probeType,
+		Model:   modelFlag,
+		Verbose: verboseFlag,
 	}
 
 	_, err = prober.RunProbe(ctx, args)

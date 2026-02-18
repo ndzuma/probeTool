@@ -26,6 +26,7 @@ type ProbeArgs struct {
 	Type     string
 	Provider string
 	Model    string
+	Verbose  bool
 }
 
 func getAgentPath() (string, error) {
@@ -115,6 +116,7 @@ func RunProbe(ctx context.Context, args ProbeArgs) (string, error) {
 		"--target="+cwd,
 		"--out="+absPath,
 		"--model="+model,
+		"--verbose="+fmt.Sprintf("%t", args.Verbose),
 	)
 
 	// Set OpenRouter env vars
@@ -152,6 +154,12 @@ func RunProbe(ctx context.Context, args ProbeArgs) (string, error) {
 					fmt.Printf("%s Reviewing medium risks...\n", yellow("🟡"))
 				case "finalizing":
 					fmt.Printf("%s Compiling security report...\n", green("📝"))
+				}
+			} else if strings.HasPrefix(line, "VERBOSE:") {
+				// Handle verbose logs
+				if args.Verbose {
+					msg := strings.TrimPrefix(line, "VERBOSE:")
+					fmt.Printf("%s %s\n", blue("🔍"), msg)
 				}
 			} else if strings.HasPrefix(line, "SUCCESS:") {
 				fmt.Println()

@@ -15,6 +15,14 @@ const getArg = (name) => args.find(a => a.startsWith(`--${name}=`))?.split('=')[
 const target = getArg('target') || process.cwd()
 const outPath = getArg('out')
 const model = getArg('model') || 'anthropic/claude-3.5-haiku'
+const verbose = getArg('verbose') === 'true'
+
+// Helper function for verbose logging
+function verboseLog(msg) {
+  if (verbose) {
+    console.log(`VERBOSE:${msg}`)
+  }
+}
 
 // Verify required env vars for OpenRouter
 if (!process.env.ANTHROPIC_AUTH_TOKEN) {
@@ -65,6 +73,22 @@ Use the security-audit skill to structure your analysis.
   workingDirectory: target  // Tools like Read, Grep work here
 }
 
+// Verbose logging
+verboseLog(`Agent directory: ${__dirname}`)
+verboseLog(`Target directory: ${target}`)
+verboseLog(`Looking for skills in: ${path.join(__dirname, '.claude/skills')}`)
+verboseLog(`Model: ${model}`)
+verboseLog(`Allowed tools: ${options.allowedTools.join(', ')}`)
+
+// Check if skill file exists
+const skillPath = path.join(__dirname, '.claude/skills/security-audit/SKILL.md')
+const { existsSync } = await import('fs')
+if (existsSync(skillPath)) {
+  verboseLog(`✓ security-audit skill found at: ${skillPath}`)
+} else {
+  verboseLog(`✗ security-audit skill NOT found at: ${skillPath}`)
+}
+
 // Run audit
 let markdownOutput = ''
 let currentSection = ''
@@ -73,10 +97,22 @@ console.log('PROGRESS:reading_files')
 
 try {
   for await (const message of query({ prompt: fullAuditPrompt(target), options })) {
+    
+    // ADD: Log message types in verbose mode
+    if (verbose && message.type) {
+      verboseLog(`Message type: ${message.type}`)
+    }
+    
     if (message.type === 'assistant') {
       for (const block of message.message.content) {
         if (block.type === 'text') {
           markdownOutput += block.text
+          
+          // ADD: Show snippet of what model is saying
+          if (verbose) {
+            const snippet = block.text.substring(0, 100).replace(/\n/g, ' ')
+            verboseLog(`Assistant: ${snippet}...`)
+          }
           
           const text = block.text.toLowerCase()
           if (text.includes('critical vulnerabilities') || text.includes('🔴')) {
@@ -101,8 +137,23 @@ try {
             }
           }
         }
+        
+        // ADD: Log tool use in verbose mode
+        if (block.type === 'tool_use' && verbose) {
+          verboseLog(`Tool call: ${block.name}`)
+          if (block.name === 'Skill') {
+            verboseLog(`  → Using skill: ${block.input?.name || 'unknown'}`)
+          }
+        }
       }
-    } else if (message.type === 'result') {
+    } 
+    
+    // ADD: Log tool results
+    else if (message.type === 'tool_result' && verbose) {
+      verboseLog(`Tool result: ${message.tool_name}`)
+    }
+    
+    else if (message.type === 'result') {
       if (message.subtype === 'success') {
         console.log('PROGRESS:finalizing')
         
