@@ -58,8 +58,18 @@ const options = {
     type: 'preset',
     preset: 'claude_code',
     append: `
-You are a senior security engineer conducting a comprehensive security audit.
-Use the security-audit skill to structure your analysis.
+You are a senior security engineer conducting comprehensive security audits.
+
+CRITICAL: You have access to a skill called "security-audit" via the Skill tool.
+Before starting any audit, invoke it with: Skill(name="security-audit")
+
+This skill provides:
+- Complete audit methodology
+- Security categories to check
+- Detection patterns to use
+- Report structure to follow
+
+Always use the security-audit skill to guide your analysis.
     `.trim()
   },
   
@@ -80,14 +90,44 @@ verboseLog(`Looking for skills in: ${path.join(__dirname, '.claude/skills')}`)
 verboseLog(`Model: ${model}`)
 verboseLog(`Allowed tools: ${options.allowedTools.join(', ')}`)
 
-// Check if skill file exists
-const skillPath = path.join(__dirname, '.claude/skills/security-audit/SKILL.md')
-const { existsSync } = await import('fs')
-if (existsSync(skillPath)) {
-  verboseLog(`✓ security-audit skill found at: ${skillPath}`)
+// Debug: List available skills
+verboseLog('=== DEBUG: Checking available skills ===')
+const { readdirSync, existsSync, readFileSync } = await import('fs')
+const skillsDir = path.join(__dirname, '.claude/skills')
+if (existsSync(skillsDir)) {
+  const skills = readdirSync(skillsDir)
+  verboseLog(`Available skills: ${skills.join(', ')}`)
+  
+  // Check if security-audit exists and is readable
+  const securityAuditPath = path.join(skillsDir, 'security-audit/SKILL.md')
+  if (existsSync(securityAuditPath)) {
+    const content = readFileSync(securityAuditPath, 'utf-8')
+    verboseLog(`✓ security-audit SKILL.md found: ${content.length} bytes`)
+    verboseLog(`  First line: ${content.split('\n')[0]}`)
+    
+    // Check YAML frontmatter
+    const lines = content.split('\n')
+    if (lines[0] === '---') {
+      let hasName = false
+      for (let i = 1; i < lines.length; i++) {
+        if (lines[i].startsWith('name:')) {
+          hasName = true
+          verboseLog(`  ✓ YAML frontmatter found: ${lines[i]}`)
+          break
+        }
+        if (lines[i] === '---') break
+      }
+      if (!hasName) {
+        verboseLog(`  ✗ WARNING: No 'name:' field in YAML frontmatter`)
+      }
+    }
+  } else {
+    verboseLog(`✗ security-audit SKILL.md NOT found at: ${securityAuditPath}`)
+  }
 } else {
-  verboseLog(`✗ security-audit skill NOT found at: ${skillPath}`)
+  verboseLog(`✗ Skills directory NOT found at: ${skillsDir}`)
 }
+verboseLog('=== END DEBUG ===')
 
 // Run audit
 let markdownOutput = ''
