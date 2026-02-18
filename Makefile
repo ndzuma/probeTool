@@ -1,21 +1,17 @@
-# Makefile for probeTool
+.PHONY: agent probe install test clean
 
-BINARY_NAME=probe
-GOBIN=$(shell go env GOPATH)/bin
-PROBES_DIR=$(shell dirname $(GOBIN))/probes
+agent:
+	cd agent && npm install
 
-.PHONY: probe
-probe:
-	go build -o $(BINARY_NAME) ./cmd/probe
+probe: agent
+	go build -o probe ./cmd/probe
 
-.PHONY: install
-install:
+install: agent
 	go install ./cmd/probe
 
-.PHONY: run
-run: probe
-	./$(BINARY_NAME)
+test:
+	cd ~/test-repo && probe --full
 
-.PHONY: clean
 clean:
-	rm -f $(BINARY_NAME) probes/*.md
+	rm -f probe
+	rm -f probes/*.md
