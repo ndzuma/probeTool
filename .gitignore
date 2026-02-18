@@ -29,6 +29,7 @@ go.work.buildinfo
 # ==================
 audits/
 audits.db
+probes.db
 probe
 probe.exe
 
