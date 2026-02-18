@@ -5,9 +5,9 @@ import (
 	"os"
 	"time"
 
-	"audit-tool/internal/auditor"
-	"audit-tool/internal/db"
-	"audit-tool/internal/server"
+	"github.com/ndzuma/probeTool/internal/db"
+	"github.com/ndzuma/probeTool/internal/prober"
+	"github.com/ndzuma/probeTool/internal/server"
 	"github.com/spf13/cobra"
 )
 
@@ -19,19 +19,19 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "audit",
-	Short: "Audit tool for code analysis",
-	Long:  `A CLI tool to perform audits on codebases and view results via web interface.`,
+	Use:   "probe",
+	Short: "Probe tool for code analysis",
+	Long:  `A CLI tool to perform probes on codebases and view results via web interface.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		runAudit()
+		runProbe()
 	},
 }
 
 func init() {
-	rootCmd.Flags().BoolVar(&fullFlag, "full", true, "Run a full audit (default)")
-	rootCmd.Flags().BoolVar(&quickFlag, "quick", false, "Run a quick audit")
-	rootCmd.Flags().StringVar(&specificPath, "specific", "", "Audit a specific path")
-	rootCmd.Flags().BoolVar(&changesFlag, "changes", false, "Audit changes only")
+	rootCmd.Flags().BoolVar(&fullFlag, "full", true, "Run a full probe (default)")
+	rootCmd.Flags().BoolVar(&quickFlag, "quick", false, "Run a quick probe")
+	rootCmd.Flags().StringVar(&specificPath, "specific", "", "Probe a specific path")
+	rootCmd.Flags().BoolVar(&changesFlag, "changes", false, "Probe changes only")
 }
 
 func Execute() {
@@ -41,38 +41,38 @@ func Execute() {
 	}
 }
 
-func runAudit() {
-	// Determine audit type
-	auditType := "full"
+func runProbe() {
+	// Determine probe type
+	probeType := "full"
 	if quickFlag {
-		auditType = "quick"
+		probeType = "quick"
 	}
 	if changesFlag {
-		auditType = "changes"
+		probeType = "changes"
 	}
 
 	// Get target directory
-	target, err := auditor.GetTarget(specificPath)
+	target, err := prober.GetTarget(specificPath)
 	if err != nil {
 		fmt.Printf("❌ Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Generate audit ID
-	auditID := time.Now().Format("2006-01-02-15-04-05") + "-" + auditType
+	// Generate probe ID
+	probeID := time.Now().Format("2006-01-02-15-04-05") + "-" + probeType
 
-	// Initialize database
-	database, err := db.InitDB("./audits/audits.db")
+	// Initialize database (probesDir and dbPath from db package)
+	database, err := db.InitDB(db.DBPath())
 	if err != nil {
 		fmt.Printf("❌ Error initializing database: %v\n", err)
 		os.Exit(1)
 	}
 	defer database.Close()
 
-	// Insert audit record
-	err = db.InsertAudit(database, auditID, auditType, target, "")
+	// Insert probe record
+	err = db.InsertProbe(database, probeID, probeType, target, "")
 	if err != nil {
-		fmt.Printf("❌ Error creating audit record: %v\n", err)
+		fmt.Printf("❌ Error creating probe record: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -80,22 +80,22 @@ func runAudit() {
 	go server.StartServer(database)
 
 	// Print progress
-	fmt.Println("🔄 Starting audit...")
+	fmt.Println("🔄 Starting probe...")
 	fmt.Printf("📦 Target: %s\n", target)
-	fmt.Printf("📊 Status: %s\n", auditID)
-	fmt.Printf("🚀 View: http://localhost:3030/audits/%s\n", auditID)
+	fmt.Printf("📊 Status: %s\n", probeID)
+	fmt.Printf("🚀 View: http://localhost:3030/probes/%s\n", probeID)
 
-	// Simulate audit work
+	// Simulate probe work
 	time.Sleep(1 * time.Second)
 
 	// Mark as completed
-	err = db.UpdateAuditStatus(database, auditID, "completed")
+	err = db.UpdateProbeStatus(database, probeID, "completed")
 	if err != nil {
-		fmt.Printf("❌ Error updating audit status: %v\n", err)
+		fmt.Printf("❌ Error updating probe status: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("✅ Audit stored in SQLite")
+	fmt.Println("✅ Probe stored in SQLite")
 
 	// Keep the program running
 	select {}

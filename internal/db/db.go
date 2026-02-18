@@ -9,6 +9,18 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+// ProbesDir returns the path to the probes directory (inside probeTool repo)
+func ProbesDir() string {
+	exe, _ := os.Executable()
+	dir := filepath.Dir(exe)
+	return filepath.Join(dir, "probes")
+}
+
+// DBPath returns the full path to the SQLite database
+func DBPath() string {
+	return filepath.Join(ProbesDir(), "probes.db")
+}
+
 // InitDB initializes the SQLite database and creates the necessary tables.
 func InitDB(dbPath string) (*sql.DB, error) {
 	// Create the directory if it doesn't exist
@@ -23,7 +35,7 @@ func InitDB(dbPath string) (*sql.DB, error) {
 	}
 
 	// Create table
-	createTableSQL := `CREATE TABLE IF NOT EXISTS audits (
+	createTableSQL := `CREATE TABLE IF NOT EXISTS probes (
 		id TEXT PRIMARY KEY,
 		type TEXT NOT NULL,
 		target TEXT NOT NULL,
@@ -40,58 +52,58 @@ func InitDB(dbPath string) (*sql.DB, error) {
 	return db, nil
 }
 
-// InsertAudit inserts a new audit record into the database.
-func InsertAudit(db *sql.DB, id, auditType, target, filePath string) error {
-	query := `INSERT INTO audits (id, type, target, file_path, status) VALUES (?, ?, ?, ?, 'running')`
-	_, err := db.Exec(query, id, auditType, target, filePath)
+// InsertProbe inserts a new probe record into the database.
+func InsertProbe(db *sql.DB, id, probeType, target, filePath string) error {
+	query := `INSERT INTO probes (id, type, target, file_path, status) VALUES (?, ?, ?, ?, 'running')`
+	_, err := db.Exec(query, id, probeType, target, filePath)
 	return err
 }
 
-// UpdateAuditStatus updates the status of an audit.
-func UpdateAuditStatus(db *sql.DB, id, status string) error {
-	query := `UPDATE audits SET status = ? WHERE id = ?`
+// UpdateProbeStatus updates the status of a probe.
+func UpdateProbeStatus(db *sql.DB, id, status string) error {
+	query := `UPDATE probes SET status = ? WHERE id = ?`
 	_, err := db.Exec(query, status, id)
 	return err
 }
 
-// GetAudit retrieves a single audit by ID.
-func GetAudit(db *sql.DB, id string) (*Audit, error) {
-	query := `SELECT id, type, target, file_path, status, created_at FROM audits WHERE id = ?`
+// GetProbe retrieves a single probe by ID.
+func GetProbe(db *sql.DB, id string) (*Probe, error) {
+	query := `SELECT id, type, target, file_path, status, created_at FROM probes WHERE id = ?`
 	row := db.QueryRow(query, id)
 
-	var audit Audit
-	err := row.Scan(&audit.ID, &audit.Type, &audit.Target, &audit.FilePath, &audit.Status, &audit.CreatedAt)
+	var probe Probe
+	err := row.Scan(&probe.ID, &probe.Type, &probe.Target, &probe.FilePath, &probe.Status, &probe.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
 
-	return &audit, nil
+	return &probe, nil
 }
 
-// GetAllAudits retrieves all audits from the database.
-func GetAllAudits(db *sql.DB) ([]Audit, error) {
-	query := `SELECT id, type, target, file_path, status, created_at FROM audits ORDER BY created_at DESC`
+// GetAllProbes retrieves all probes from the database.
+func GetAllProbes(db *sql.DB) ([]Probe, error) {
+	query := `SELECT id, type, target, file_path, status, created_at FROM probes ORDER BY created_at DESC`
 	rows, err := db.Query(query)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var audits []Audit
+	var probes []Probe
 	for rows.Next() {
-		var audit Audit
-		err := rows.Scan(&audit.ID, &audit.Type, &audit.Target, &audit.FilePath, &audit.Status, &audit.CreatedAt)
+		var probe Probe
+		err := rows.Scan(&probe.ID, &probe.Type, &probe.Target, &probe.FilePath, &probe.Status, &probe.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
-		audits = append(audits, audit)
+		probes = append(probes, probe)
 	}
 
-	return audits, nil
+	return probes, nil
 }
 
-// Audit represents an audit record.
-type Audit struct {
+// Probe represents a probe record.
+type Probe struct {
 	ID        string `json:"id"`
 	Type      string `json:"type"`
 	Target    string `json:"target"`

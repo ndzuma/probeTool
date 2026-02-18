@@ -1,4 +1,4 @@
-module audit-tool
+module github.com/ndzuma/probeTool
 
 go 1.21
 
