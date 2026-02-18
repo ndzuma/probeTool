@@ -1,4 +1,5 @@
 export function fullAuditPrompt(targetPath) {
+  console.log('Starting full audit...')
   return `
 Perform a comprehensive security and performance audit of this codebase: ${targetPath}
 
