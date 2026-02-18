@@ -1,52 +1,16 @@
 export function fullAuditPrompt(targetPath) {
   return `
-Perform a comprehensive software audit of this repository: ${targetPath}
+Perform a comprehensive security and performance audit of this codebase: ${targetPath}
 
-**Use the code-audit skill** to structure your analysis systematically.
+Use the security-audit skill to guide your analysis.
 
-## Your Task
+Requirements:
+1. Scan EVERY file in the repository
+2. Only report vulnerabilities you actually find in the code
+3. Include exact file paths and line numbers
+4. Show actual code snippets as proof
+5. Follow the report structure defined in the security-audit skill
 
-1. **Discover Structure**: Use Glob to understand the codebase layout
-2. **Analyze Security**: Find auth issues, injection risks, secret leaks
-3. **Review Performance**: Identify bottlenecks, N+1 queries, inefficiencies
-4. **Assess Architecture**: Evaluate design patterns, separation of concerns
-5. **Check Code Quality**: Find duplication, complexity, anti-patterns
-
-## Output Requirements
-
-Generate a **detailed markdown report** with these sections:
-
-### Executive Summary
-2-3 sentences: overall health, critical issue count, risk level
-
-### Critical Issues 🔴
-Issues requiring immediate attention with:
-- File path and line number
-- Severity justification
-- Specific fix steps
-
-### Security Concerns 🟠
-Vulnerabilities with exploitation scenarios
-
-### Performance Observations 🟡
-Bottlenecks with optimization approaches
-
-### Code Quality 🔵
-Maintainability issues with refactoring suggestions
-
-### Architecture Notes 🟢
-Design improvements and pattern recommendations
-
-### Recommendations
-Prioritized action items (1-10) with effort estimates
-
-## Format Each Finding As:
-- **File**: \`path/to/file:line\`
-- **Severity**: Critical/High/Medium/Low
-- **Description**: Clear explanation
-- **Impact**: What could happen
-- **Fix**: Specific remediation steps
-
-Begin your audit now.
+Begin the audit now.
 `.trim()
 }

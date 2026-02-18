@@ -1,17 +1,18 @@
-.PHONY: agent probe install test clean
+.PHONY: probe install setup test clean
 
-agent:
-	cd agent && npm install
-
-probe: agent
+probe:
 	go build -o probe ./cmd/probe
 
-install: agent
+install: probe
 	go install ./cmd/probe
+	./probe setup
+
+setup:
+	./probe setup
 
 test:
 	cd ~/test-repo && probe --full
 
 clean:
 	rm -f probe
-	rm -f probes/*.md
+	rm -rf ~/.probe/probes/*.md
