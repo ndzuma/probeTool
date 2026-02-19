@@ -11,6 +11,7 @@ import (
 	"github.com/ndzuma/probeTool/internal/db"
 	"github.com/ndzuma/probeTool/internal/paths"
 	"github.com/ndzuma/probeTool/internal/prober"
+	"github.com/ndzuma/probeTool/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -19,6 +20,7 @@ var (
 	quickFlag   bool
 	modelFlag   string
 	verboseFlag bool
+	versionFlag bool
 )
 
 var rootCmd = &cobra.Command{
@@ -26,6 +28,12 @@ var rootCmd = &cobra.Command{
 	Short: "Probe tool for code analysis",
 	Long:  `A CLI tool to perform probes on codebases and view results via web interface.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		// Check if -v flag is used
+		if versionFlag {
+			info := version.GetInfo()
+			fmt.Println(info.String())
+			return
+		}
 		runProbe()
 	},
 }
@@ -34,7 +42,8 @@ func init() {
 	rootCmd.Flags().BoolVar(&fullFlag, "full", false, "Run a full probe (default)")
 	rootCmd.Flags().BoolVar(&quickFlag, "quick", false, "Run a quick probe")
 	rootCmd.Flags().StringVar(&modelFlag, "model", "", "Override the default model")
-	rootCmd.Flags().BoolVarP(&verboseFlag, "verbose", "v", false, "Enable verbose output")
+	rootCmd.Flags().BoolVar(&verboseFlag, "verbose", false, "Enable verbose output")
+	rootCmd.Flags().BoolVarP(&versionFlag, "version", "v", false, "Show version")
 
 	// Make --full the default if no other flag is set
 	rootCmd.PreRun = func(cmd *cobra.Command, args []string) {

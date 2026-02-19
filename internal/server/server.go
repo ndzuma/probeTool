@@ -12,6 +12,7 @@ import (
 
 	"github.com/ndzuma/probeTool/internal/config"
 	"github.com/ndzuma/probeTool/internal/db"
+	"github.com/ndzuma/probeTool/internal/version"
 )
 
 var database *sql.DB
@@ -28,6 +29,7 @@ func StartServer(dbConn *sql.DB) {
 	mux.HandleFunc("/api/findings/", cors(handleFindings))
 	mux.HandleFunc("/api/config", cors(handleConfig))
 	mux.HandleFunc("/api/file-tree/", cors(handleFileTree))
+	mux.HandleFunc("/api/version", cors(handleVersion))
 
 	fmt.Println("🌐 API server starting on http://localhost:3030")
 	fmt.Println("📡 Frontend: cd web && npm run dev (http://localhost:3000)")
@@ -334,4 +336,16 @@ func handleFileTree(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, tree)
+}
+
+// ─── GET /api/version ─────────────────────────────────────────────────────────
+
+func handleVersion(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	info := version.GetInfo()
+	writeJSON(w, http.StatusOK, info)
 }

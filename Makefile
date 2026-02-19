@@ -1,5 +1,18 @@
 .PHONY: probe probe-only install setup test clean web web-deps web-build dev-web dev-api clean-web clean-all
 
+# ─── Version Info ────────────────────────────────────────────────────────────
+
+VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "dev")
+COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+GO_VERSION ?= $(shell go version | awk '{print $$3}')
+
+LDFLAGS := -ldflags "\
+	-X github.com/ndzuma/probeTool/internal/version.Version=$(VERSION) \
+	-X github.com/ndzuma/probeTool/internal/version.Commit=$(COMMIT) \
+	-X github.com/ndzuma/probeTool/internal/version.BuildDate=$(BUILD_DATE) \
+	-X github.com/ndzuma/probeTool/internal/version.GoVersion=$(GO_VERSION)"
+
 # ─── Web Dashboard ───────────────────────────────────────────────────────────
 
 web-deps:
@@ -13,10 +26,10 @@ web: web-build
 # ─── Go Binary ───────────────────────────────────────────────────────────────
 
 probe: web
-	go build -o probe ./cmd/probe
+	go build $(LDFLAGS) -o probe ./cmd/probe
 
 probe-only:
-	go build -o probe ./cmd/probe
+	go build $(LDFLAGS) -o probe ./cmd/probe
 
 install: probe
 	go install ./cmd/probe
