@@ -23,7 +23,6 @@ func StartServer(dbConn *sql.DB) {
 
 	mux := http.NewServeMux()
 
-	// API routes
 	mux.HandleFunc("/api/probes", cors(handleProbes))
 	mux.HandleFunc("/api/probes/", cors(handleProbeDetail))
 	mux.HandleFunc("/api/findings/", cors(handleFindings))
@@ -36,6 +35,16 @@ func StartServer(dbConn *sql.DB) {
 	if err != nil {
 		fmt.Printf("❌ Server error: %v\n", err)
 	}
+}
+
+func RegisterRoutes(mux *http.ServeMux, dbConn *sql.DB) {
+	database = dbConn
+
+	mux.HandleFunc("/api/probes", cors(handleProbes))
+	mux.HandleFunc("/api/probes/", cors(handleProbeDetail))
+	mux.HandleFunc("/api/findings/", cors(handleFindings))
+	mux.HandleFunc("/api/config", cors(handleConfig))
+	mux.HandleFunc("/api/file-tree/", cors(handleFileTree))
 }
 
 // ─── Middleware ──────────────────────────────────────────────────────────────

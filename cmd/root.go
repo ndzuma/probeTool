@@ -3,13 +3,13 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/ndzuma/probeTool/internal/db"
 	"github.com/ndzuma/probeTool/internal/prober"
-	"github.com/ndzuma/probeTool/internal/server"
 	"github.com/spf13/cobra"
 )
 
@@ -51,13 +51,11 @@ func Execute() {
 }
 
 func runProbe() {
-	// Determine probe type
 	probeType := "full"
 	if quickFlag {
 		probeType = "quick"
 	}
 
-	// Initialize database
 	database, err := db.InitDB(db.DBPath())
 	if err != nil {
 		fmt.Printf("❌ Error initializing database: %v\n", err)
@@ -65,10 +63,8 @@ func runProbe() {
 	}
 	defer database.Close()
 
-	// Start server in background
-	go server.StartServer(database)
+	checkDashboard()
 
-	// Setup context with signal handling
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -80,19 +76,27 @@ func runProbe() {
 		os.Exit(0)
 	}()
 
-	// Run probe with new API
 	args := prober.ProbeArgs{
 		Type:    probeType,
 		Model:   modelFlag,
 		Verbose: verboseFlag,
 	}
 
-	_, err = prober.RunProbe(ctx, args)
+	probeID, err := prober.RunProbe(ctx, args)
 	if err != nil {
 		fmt.Printf("❌ Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Keep the program running
-	select {}
+	fmt.Println("✅ Security audit complete!")
+	fmt.Printf("🔗 View: http://localhost:37330/probes/%s\n", probeID)
+}
+
+func checkDashboard() {
+	resp, err := http.Get("http://localhost:37330/api/health")
+	if err != nil {
+		fmt.Println("💡 Tip: Run 'probe serve' in another terminal to view results in the dashboard")
+		return
+	}
+	defer resp.Body.Close()
 }
