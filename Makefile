@@ -42,7 +42,11 @@ dev-api: probe-only
 
 clean:
 	rm -f probe
-	rm -rf ~/.probe/probes/*.md
+	@if command -v ./probe >/dev/null 2>&1; then \
+		./probe clean; \
+	else \
+		rm -rf ~/.probe/probes/*.md 2>/dev/null || true; \
+	fi
 
 clean-web:
 	rm -rf web/.next web/out

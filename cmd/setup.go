@@ -8,13 +8,14 @@ import (
 	"path/filepath"
 
 	"github.com/fatih/color"
+	"github.com/ndzuma/probeTool/internal/paths"
 	"github.com/spf13/cobra"
 )
 
 var setupCmd = &cobra.Command{
 	Use:   "setup",
 	Short: "Install probe agent files",
-	Long:  "Copies agent files to ~/.probe/agent/ and installs dependencies",
+	Long:  "Copies agent files to OS-standard location and installs dependencies",
 	Run: func(cmd *cobra.Command, args []string) {
 		runSetup()
 	},
@@ -31,20 +32,18 @@ func runSetup() {
 
 	fmt.Printf("%s Setting up probe agent...\n\n", cyan("⚙️"))
 
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Printf("%s Failed to get home directory: %v\n", red("❌"), err)
+	// Ensure all app directories exist
+	if err := paths.EnsureAppDirs(); err != nil {
+		fmt.Printf("%s Failed to create directories: %v\n", red("❌"), err)
 		os.Exit(1)
 	}
 
-	probeDir := filepath.Join(homeDir, ".probe")
-	agentDir := filepath.Join(probeDir, "agent")
+	agentDir := paths.GetAgentDir()
 	// FIX: .claude goes INSIDE agent directory (where SDK expects it with settingSources: ['project'])
 	skillsDir := filepath.Join(agentDir, ".claude", "skills")
 
-	// Create directories
+	// Create skills directory
 	fmt.Println("Creating directories...")
-	os.MkdirAll(agentDir, 0755)
 	os.MkdirAll(skillsDir, 0755)
 
 	// Check if we're in development (source available)

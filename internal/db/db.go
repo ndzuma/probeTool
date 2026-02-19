@@ -7,18 +7,19 @@ import (
 	"path/filepath"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/ndzuma/probeTool/internal/paths"
 )
 
-// ProbesDir returns the path to the probes directory (inside probeTool repo)
+// ProbesDir returns the path to the probes directory
+// Deprecated: Use paths.GetProbesDir() instead
 func ProbesDir() string {
-	exe, _ := os.Executable()
-	dir := filepath.Dir(exe)
-	return filepath.Join(dir, "probes")
+	return paths.GetProbesDir()
 }
 
 // DBPath returns the full path to the SQLite database
+// Deprecated: Use paths.GetDBPath() instead
 func DBPath() string {
-	return filepath.Join(ProbesDir(), "probes.db")
+	return paths.GetDBPath()
 }
 
 // InitDB initializes the SQLite database and creates the necessary tables.

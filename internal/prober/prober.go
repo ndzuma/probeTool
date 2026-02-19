@@ -14,6 +14,7 @@ import (
 	"github.com/ndzuma/probeTool/internal/config"
 	"github.com/ndzuma/probeTool/internal/db"
 	"github.com/ndzuma/probeTool/internal/findings"
+	"github.com/ndzuma/probeTool/internal/paths"
 )
 
 var (
@@ -32,14 +33,8 @@ type ProbeArgs struct {
 }
 
 func getAgentPath() (string, error) {
-	// Check if agent is installed in ~/.probe/agent/
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-
-	agentDir := filepath.Join(homeDir, ".probe", "agent")
-	agentScript := filepath.Join(agentDir, "probe-runner.js")
+	// Check if agent is installed
+	agentScript := paths.GetAgentPath()
 
 	if _, err := os.Stat(agentScript); os.IsNotExist(err) {
 		return "", fmt.Errorf("agent not installed. Run: probe setup")
@@ -92,9 +87,8 @@ func RunProbe(ctx context.Context, args ProbeArgs) (string, error) {
 
 	id := fmt.Sprintf("%s-%s", time.Now().Format("2006-01-02-150405"), args.Type)
 
-	homeDir, _ := os.UserHomeDir()
-	probesDir := filepath.Join(homeDir, ".probe", "probes")
-	os.MkdirAll(probesDir, 0755)
+	probesDir := paths.GetProbesDir()
+	paths.EnsureAppDirs()
 	mdPath := filepath.Join(probesDir, id+".md")
 
 	absPath, _ := filepath.Abs(mdPath)

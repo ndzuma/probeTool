@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/ndzuma/probeTool/internal/db"
+	"github.com/ndzuma/probeTool/internal/paths"
 	"github.com/ndzuma/probeTool/internal/prober"
 	"github.com/spf13/cobra"
 )
@@ -44,6 +45,16 @@ func init() {
 }
 
 func Execute() {
+	// Auto-migrate if needed (silent, one-time)
+	if paths.NeedsMigration() {
+		fmt.Println("🔄 First run with new version - migrating config...")
+		if err := paths.Migrate(); err != nil {
+			fmt.Printf("⚠️  Migration warning: %v\n", err)
+			fmt.Println("💡 You can run 'probe migrate' manually if needed")
+		}
+		fmt.Println()
+	}
+
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

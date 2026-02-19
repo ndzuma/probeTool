@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
+
+	"github.com/ndzuma/probeTool/internal/paths"
 )
 
 type Config struct {
@@ -21,18 +22,16 @@ type Provider struct {
 	DefaultModel string   `json:"default_model"`
 }
 
-// GetConfigDir returns the .probe directory path
+// GetConfigDir returns the application directory path
+// Deprecated: Use paths.GetAppDir() instead
 func GetConfigDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = "."
-	}
-	return filepath.Join(home, ".probe")
+	return paths.GetAppDir()
 }
 
 // GetConfigPath returns the full path to config.json
+// Deprecated: Use paths.GetConfigPath() instead
 func GetConfigPath() string {
-	return filepath.Join(GetConfigDir(), "config.json")
+	return paths.GetConfigPath()
 }
 
 // Load loads the configuration from disk
