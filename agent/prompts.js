@@ -1,7 +1,9 @@
 export function fullAuditPrompt(targetPath) {
   return `
-Audit this codebase: ${targetPath}
+First, list what skills you have available.
 
-Use the security-audit skill to guide your analysis.
-`.trim();
+Then audit this codebase: ${targetPath}
+
+Use the security-audit skill to guide your comprehensive security and performance analysis.
+`.trim()
 }

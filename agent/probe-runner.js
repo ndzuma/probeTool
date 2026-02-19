@@ -45,12 +45,31 @@ import { fullAuditPrompt } from './prompts.js'
 
 console.log(`PROGRESS:init:openrouter:${model}`)
 
-// FIX: Correct skill loading per SDK docs
+// Read skill content for direct injection
+const { readFileSync } = await import('fs')
+const skillPath = path.join(__dirname, '.claude/skills/security-audit/SKILL.md')
+let skillContent = ''
+try {
+  skillContent = readFileSync(skillPath, 'utf-8')
+  // Remove YAML frontmatter if present
+  if (skillContent.startsWith('---')) {
+    const endMarker = skillContent.indexOf('---', 3)
+    if (endMarker !== -1) {
+      skillContent = skillContent.substring(endMarker + 3).trim()
+    }
+  }
+  verboseLog(`✓ Skill content loaded: ${skillContent.length} bytes`)
+} catch (err) {
+  console.error(`ERROR: Could not load skill file: ${err.message}`)
+  process.exit(1)
+}
+
+// FIX: Inject skill directly into systemPrompt instead of relying on Skill tool
 const options = {
   model: model,
   
-  // Add 'Skill' to allowed tools
-  allowedTools: ['Skill', 'Read', 'Glob', 'Grep', 'Bash'],
+  // Don't use Skill tool - we're injecting directly
+  allowedTools: ['Read', 'Glob', 'Grep', 'Bash'],
   
   permissionMode: 'acceptEdits',
   
@@ -60,74 +79,25 @@ const options = {
     append: `
 You are a senior security engineer conducting comprehensive security audits.
 
-CRITICAL: You have access to a skill called "security-audit" via the Skill tool.
-Before starting any audit, invoke it with: Skill(name="security-audit")
+${skillContent}
 
-This skill provides:
-- Complete audit methodology
-- Security categories to check
-- Detection patterns to use
-- Report structure to follow
-
-Always use the security-audit skill to guide your analysis.
+Follow ALL instructions from the security-audit skill above.
     `.trim()
   },
   
-  // Load skills from 'project' (looks for .claude/skills/ relative to cwd)
-  settingSources: ['project'],
-  
   // Set cwd to agent directory (where .claude/skills/ is located)
-  cwd: __dirname,  // This is ~/.probe/agent/ which contains .claude/
+  cwd: __dirname,
   
   // But tools should operate on target repo
-  workingDirectory: target  // Tools like Read, Grep work here
+  workingDirectory: target
 }
 
 // Verbose logging
 verboseLog(`Agent directory: ${__dirname}`)
 verboseLog(`Target directory: ${target}`)
-verboseLog(`Looking for skills in: ${path.join(__dirname, '.claude/skills')}`)
 verboseLog(`Model: ${model}`)
 verboseLog(`Allowed tools: ${options.allowedTools.join(', ')}`)
-
-// Debug: List available skills
-verboseLog('=== DEBUG: Checking available skills ===')
-const { readdirSync, existsSync, readFileSync } = await import('fs')
-const skillsDir = path.join(__dirname, '.claude/skills')
-if (existsSync(skillsDir)) {
-  const skills = readdirSync(skillsDir)
-  verboseLog(`Available skills: ${skills.join(', ')}`)
-  
-  // Check if security-audit exists and is readable
-  const securityAuditPath = path.join(skillsDir, 'security-audit/SKILL.md')
-  if (existsSync(securityAuditPath)) {
-    const content = readFileSync(securityAuditPath, 'utf-8')
-    verboseLog(`✓ security-audit SKILL.md found: ${content.length} bytes`)
-    verboseLog(`  First line: ${content.split('\n')[0]}`)
-    
-    // Check YAML frontmatter
-    const lines = content.split('\n')
-    if (lines[0] === '---') {
-      let hasName = false
-      for (let i = 1; i < lines.length; i++) {
-        if (lines[i].startsWith('name:')) {
-          hasName = true
-          verboseLog(`  ✓ YAML frontmatter found: ${lines[i]}`)
-          break
-        }
-        if (lines[i] === '---') break
-      }
-      if (!hasName) {
-        verboseLog(`  ✗ WARNING: No 'name:' field in YAML frontmatter`)
-      }
-    }
-  } else {
-    verboseLog(`✗ security-audit SKILL.md NOT found at: ${securityAuditPath}`)
-  }
-} else {
-  verboseLog(`✗ Skills directory NOT found at: ${skillsDir}`)
-}
-verboseLog('=== END DEBUG ===')
+verboseLog(`✓ Skill content injected into systemPrompt (${skillContent.length} bytes)`)
 
 // Run audit
 let markdownOutput = ''
@@ -178,11 +148,11 @@ try {
           }
         }
         
-        // ADD: Log tool use in verbose mode
+         // ADD: Log tool use in verbose mode
         if (block.type === 'tool_use' && verbose) {
           verboseLog(`Tool call: ${block.name}`)
-          if (block.name === 'Skill') {
-            verboseLog(`  → Using skill: ${block.input?.name || 'unknown'}`)
+          if (block.input) {
+            verboseLog(`  → Input: ${JSON.stringify(block.input)}`)
           }
         }
       }
