@@ -135,12 +135,18 @@ func handleProbeDetail(w http.ResponseWriter, r *http.Request) {
 		"created_at": probe.CreatedAt,
 	}
 
-	// Attach markdown content if the file exists
 	if probe.FilePath != "" {
 		content, err := os.ReadFile(probe.FilePath)
 		if err == nil {
 			response["content"] = string(content)
 		}
+	}
+
+	findingsList, err := db.GetFindingsByProbe(database, probeID)
+	if err == nil {
+		response["findings"] = findingsList
+	} else {
+		response["findings"] = []db.Finding{}
 	}
 
 	writeJSON(w, http.StatusOK, response)
@@ -177,23 +183,32 @@ func handleProbeContent(w http.ResponseWriter, r *http.Request, probeID string) 
 // ─── PATCH /api/findings/{id} ───────────────────────────────────────────────
 
 func handleFindings(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPatch {
-		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
 	findingID := strings.TrimPrefix(r.URL.Path, "/api/findings/")
 	if findingID == "" || findingID == r.URL.Path {
 		writeError(w, http.StatusBadRequest, "Invalid finding ID")
 		return
 	}
 
-	// Placeholder — ready for when findings are stored in the DB
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"id":        findingID,
-		"completed": true,
-		"message":   "Finding toggled",
-	})
+	switch r.Method {
+	case http.MethodPatch:
+		completed, err := db.ToggleFinding(database, findingID)
+		if err != nil {
+			writeError(w, http.StatusNotFound, fmt.Sprintf("Finding not found: %v", err))
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"id":        findingID,
+			"completed": completed,
+		})
+	case http.MethodDelete:
+		if err := db.DeleteFinding(database, findingID); err != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to delete finding: %v", err))
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"message": "Finding deleted"})
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+	}
 }
 
 // ─── GET/PUT /api/config ────────────────────────────────────────────────────

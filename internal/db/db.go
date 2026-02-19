@@ -34,19 +34,41 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Create table
-	createTableSQL := `CREATE TABLE IF NOT EXISTS probes (
-		id TEXT PRIMARY KEY,
-		type TEXT NOT NULL,
-		target TEXT NOT NULL,
-		file_path TEXT,
-		status TEXT DEFAULT 'running',
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);`
+	InitDB := func() error {
+		createTableSQL := `CREATE TABLE IF NOT EXISTS probes (
+			id TEXT PRIMARY KEY,
+			type TEXT NOT NULL,
+			target TEXT NOT NULL,
+			file_path TEXT,
+			status TEXT DEFAULT 'running',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);`
 
-	_, err = db.Exec(createTableSQL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create table: %w", err)
+		_, err = db.Exec(createTableSQL)
+		if err != nil {
+			return fmt.Errorf("failed to create probes table: %w", err)
+		}
+
+		findingsTableSQL := `CREATE TABLE IF NOT EXISTS findings (
+			id TEXT PRIMARY KEY,
+			probe_id TEXT NOT NULL,
+			text TEXT NOT NULL,
+			severity TEXT DEFAULT 'info',
+			completed INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (probe_id) REFERENCES probes(id) ON DELETE CASCADE
+		);`
+
+		_, err = db.Exec(findingsTableSQL)
+		if err != nil {
+			return fmt.Errorf("failed to create findings table: %w", err)
+		}
+
+		return nil
+	}
+
+	if err := InitDB(); err != nil {
+		return nil, err
 	}
 
 	return db, nil
@@ -102,7 +124,6 @@ func GetAllProbes(db *sql.DB) ([]Probe, error) {
 	return probes, nil
 }
 
-// Probe represents a probe record.
 type Probe struct {
 	ID        string `json:"id"`
 	Type      string `json:"type"`
@@ -110,4 +131,78 @@ type Probe struct {
 	FilePath  string `json:"file_path"`
 	Status    string `json:"status"`
 	CreatedAt string `json:"created_at"`
+}
+
+type Finding struct {
+	ID        string `json:"id"`
+	ProbeID   string `json:"probe_id"`
+	Text      string `json:"text"`
+	Severity  string `json:"severity"`
+	Completed bool   `json:"completed"`
+	CreatedAt string `json:"created_at"`
+}
+
+func InsertFinding(db *sql.DB, id, probeID, text, severity string) error {
+	query := `INSERT INTO findings (id, probe_id, text, severity, completed) VALUES (?, ?, ?, ?, 0)`
+	_, err := db.Exec(query, id, probeID, text, severity)
+	return err
+}
+
+func GetFindingsByProbe(db *sql.DB, probeID string) ([]Finding, error) {
+	query := `SELECT id, probe_id, text, severity, completed, created_at FROM findings WHERE probe_id = ? ORDER BY created_at ASC`
+	rows, err := db.Query(query, probeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var findings []Finding
+	for rows.Next() {
+		var f Finding
+		var completed int
+		err := rows.Scan(&f.ID, &f.ProbeID, &f.Text, &f.Severity, &completed, &f.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		f.Completed = completed == 1
+		findings = append(findings, f)
+	}
+
+	return findings, nil
+}
+
+func ToggleFinding(db *sql.DB, id string) (bool, error) {
+	var completed int
+	err := db.QueryRow(`SELECT completed FROM findings WHERE id = ?`, id).Scan(&completed)
+	if err != nil {
+		return false, err
+	}
+
+	newCompleted := 1
+	if completed == 1 {
+		newCompleted = 0
+	}
+
+	_, err = db.Exec(`UPDATE findings SET completed = ? WHERE id = ?`, newCompleted, id)
+	return newCompleted == 1, err
+}
+
+func DeleteFinding(db *sql.DB, id string) error {
+	_, err := db.Exec(`DELETE FROM findings WHERE id = ?`, id)
+	return err
+}
+
+func GetFinding(db *sql.DB, id string) (*Finding, error) {
+	query := `SELECT id, probe_id, text, severity, completed, created_at FROM findings WHERE id = ?`
+	row := db.QueryRow(query, id)
+
+	var f Finding
+	var completed int
+	err := row.Scan(&f.ID, &f.ProbeID, &f.Text, &f.Severity, &completed, &f.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	f.Completed = completed == 1
+
+	return &f, nil
 }

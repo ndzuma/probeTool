@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   MagnifyingGlass,
   CircleNotch,
@@ -76,13 +76,22 @@ const container = {
 };
 
 const item = {
-  hidden: { opacity: 0, y: 12 },
+  hidden: { opacity: 0, y: 12, scale: 0.98 },
   show: {
     opacity: 1,
     y: 0,
+    scale: 1,
     transition: {
-      duration: 0.3,
+      duration: 0.25,
       ease: [0.25, 0.1, 0.25, 1] as [number, number, number, number],
+    },
+  },
+  exit: {
+    opacity: 0,
+    y: -8,
+    scale: 0.95,
+    transition: {
+      duration: 0.15,
     },
   },
 };
@@ -232,20 +241,23 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       ) : (
-        <motion.div
-          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-          variants={container}
-          initial="hidden"
-          animate="show"
-        >
-          {filtered.map((probe) => (
-            <motion.div key={probe.id} variants={item}>
-              <Link href={`/probes/${probe.id}`}>
-                <Card className="group relative cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5">
-                  {/* Accent strip */}
-                  <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl bg-primary opacity-0 transition-opacity group-hover:opacity-100" />
-
-                  <CardHeader className="pb-2">
+        <AnimatePresence mode="popLayout">
+          <motion.div
+            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            variants={container}
+            initial="hidden"
+            animate="show"
+          >
+            {filtered.map((probe) => (
+              <motion.div
+                key={probe.id}
+                variants={item}
+                layout
+                exit="exit"
+              >
+                <Link href={`/probes/${probe.id}`}>
+                  <Card className="group relative cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5">
+                    <CardHeader className="pb-2">
                     <div className="flex items-start justify-between gap-2">
                       <CardTitle className="text-sm font-medium leading-snug line-clamp-2 group-hover:text-primary transition-colors">
                         {probe.id}
@@ -297,6 +309,7 @@ export default function DashboardPage() {
             </motion.div>
           ))}
         </motion.div>
+      </AnimatePresence>
       )}
     </div>
   );

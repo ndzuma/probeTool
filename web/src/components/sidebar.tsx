@@ -70,7 +70,7 @@ export function Sidebar() {
         </AnimatePresence>
       </div>
 
-      <Separator className="my-3 mx-4" />
+      <Separator className={cn("my-3", collapsed ? "mx-2" : "mx-4")} />
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1 px-3">
@@ -148,7 +148,7 @@ export function Sidebar() {
 
       {/* Bottom section */}
       <div className="px-3 pb-4 space-y-1">
-        <Separator className="mb-3" />
+        <Separator className={cn("mb-3", collapsed ? "mx-0" : "mx-1")} />
 
         {/* Theme toggle */}
         {mounted && (

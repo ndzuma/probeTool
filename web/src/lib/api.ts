@@ -60,6 +60,9 @@ export const updateConfig = (config: Config) =>
 export const toggleFinding = (id: string) =>
   request<Finding>(`/findings/${id}`, { method: "PATCH" });
 
+export const deleteFinding = (id: string) =>
+  request<void>(`/findings/${id}`, { method: "DELETE" });
+
 // File tree (placeholder)
 export const getFileTree = (id: string) =>
   request<string[]>(`/file-tree/${id}`);

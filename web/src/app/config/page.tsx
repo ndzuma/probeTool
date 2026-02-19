@@ -1,14 +1,24 @@
 "use client"
 
 import * as React from "react"
-import { motion } from "framer-motion"
-import { Gear, Plus, Trash, FloppyDisk, Key, Globe, Robot } from "@phosphor-icons/react"
+import { motion, AnimatePresence } from "framer-motion"
+import { Gear, Plus, Trash, FloppyDisk, Key, Globe, Robot, X } from "@phosphor-icons/react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { getConfig, updateConfig, type Config, type Provider } from "@/lib/api"
 
 const fadeUp = {
@@ -23,12 +33,15 @@ export default function ConfigPage() {
   const [error, setError] = React.useState<string | null>(null)
   const [success, setSuccess] = React.useState(false)
 
-  // New provider form
   const [showAdd, setShowAdd] = React.useState(false)
   const [newName, setNewName] = React.useState("")
   const [newBaseURL, setNewBaseURL] = React.useState("")
   const [newAPIKey, setNewAPIKey] = React.useState("")
   const [newModels, setNewModels] = React.useState("")
+
+  const [deleteProvider, setDeleteProvider] = React.useState<string | null>(null)
+  const [addingModelFor, setAddingModelFor] = React.useState<string | null>(null)
+  const [newModelInput, setNewModelInput] = React.useState("")
 
   React.useEffect(() => {
     loadConfig()
@@ -39,7 +52,6 @@ export default function ConfigPage() {
       const data = await getConfig()
       setConfig(data)
     } catch {
-      // If API is not available, use empty config
       setConfig({ providers: {}, default: "" })
     } finally {
       setLoading(false)
@@ -104,6 +116,7 @@ export default function ConfigPage() {
       providers,
       default: config.default === name ? Object.keys(providers)[0] || "" : config.default,
     })
+    setDeleteProvider(null)
   }
 
   function setDefault(name: string) {
@@ -120,6 +133,61 @@ export default function ConfigPage() {
     setConfig({
       ...config,
       providers: { ...config.providers, [name]: updated },
+    })
+  }
+
+  function addModel(providerName: string, model: string) {
+    if (!config || !model.trim()) return
+    const provider = config.providers[providerName]
+    if (!provider) return
+
+    if (provider.models?.includes(model.trim())) {
+      return
+    }
+
+    const updatedModels = [...(provider.models || []), model.trim()]
+    const updated = {
+      ...provider,
+      models: updatedModels,
+      default_model: provider.default_model || model.trim(),
+    }
+
+    setConfig({
+      ...config,
+      providers: { ...config.providers, [providerName]: updated },
+    })
+    setNewModelInput("")
+    setAddingModelFor(null)
+  }
+
+  function removeModel(providerName: string, model: string) {
+    if (!config) return
+    const provider = config.providers[providerName]
+    if (!provider) return
+
+    const updatedModels = (provider.models || []).filter((m) => m !== model)
+    const updated = {
+      ...provider,
+      models: updatedModels,
+      default_model: provider.default_model === model ? (updatedModels[0] || "") : provider.default_model,
+    }
+
+    setConfig({
+      ...config,
+      providers: { ...config.providers, [providerName]: updated },
+    })
+  }
+
+  function setDefaultModel(providerName: string, model: string) {
+    if (!config) return
+    const provider = config.providers[providerName]
+    if (!provider) return
+
+    const updated = { ...provider, default_model: model }
+
+    setConfig({
+      ...config,
+      providers: { ...config.providers, [providerName]: updated },
     })
   }
 
@@ -140,7 +208,6 @@ export default function ConfigPage() {
       transition={{ staggerChildren: 0.06 }}
       className="space-y-8"
     >
-      {/* Page header */}
       <motion.div variants={fadeUp} transition={{ duration: 0.3 }} className="space-y-1">
         <div className="flex items-center gap-3">
           <Gear size={24} weight="duotone" className="text-primary" />
@@ -151,7 +218,6 @@ export default function ConfigPage() {
         </p>
       </motion.div>
 
-      {/* Status messages */}
       {error && (
         <motion.div
           initial={{ opacity: 0, y: -8 }}
@@ -171,7 +237,6 @@ export default function ConfigPage() {
         </motion.div>
       )}
 
-      {/* Providers list */}
       <motion.div variants={fadeUp} transition={{ duration: 0.3 }} className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-medium">Providers</h2>
@@ -186,84 +251,84 @@ export default function ConfigPage() {
           </Button>
         </div>
 
-        {/* Add provider form */}
-        {showAdd && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <Card className="border-primary/30 border-dashed">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-base">New Provider</CardTitle>
-                <CardDescription>Add a new AI provider configuration.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
+        <AnimatePresence>
+          {showAdd && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Card className="border-primary/30 border-dashed">
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-base">New Provider</CardTitle>
+                  <CardDescription>Add a new AI provider configuration.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="new-name">Name</Label>
+                      <Input
+                        id="new-name"
+                        placeholder="e.g. anthropic"
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="new-url">Base URL</Label>
+                      <Input
+                        id="new-url"
+                        placeholder="https://api.anthropic.com"
+                        value={newBaseURL}
+                        onChange={(e) => setNewBaseURL(e.target.value)}
+                      />
+                    </div>
+                  </div>
                   <div className="space-y-2">
-                    <Label htmlFor="new-name">Name</Label>
+                    <Label htmlFor="new-key">API Key</Label>
                     <Input
-                      id="new-name"
-                      placeholder="e.g. anthropic"
-                      value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
+                      id="new-key"
+                      type="password"
+                      placeholder="sk-..."
+                      value={newAPIKey}
+                      onChange={(e) => setNewAPIKey(e.target.value)}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="new-url">Base URL</Label>
+                    <Label htmlFor="new-models">Models (comma-separated)</Label>
                     <Input
-                      id="new-url"
-                      placeholder="https://api.anthropic.com"
-                      value={newBaseURL}
-                      onChange={(e) => setNewBaseURL(e.target.value)}
+                      id="new-models"
+                      placeholder="claude-sonnet-4-20250514, claude-3-haiku-20240307"
+                      value={newModels}
+                      onChange={(e) => setNewModels(e.target.value)}
                     />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="new-key">API Key</Label>
-                  <Input
-                    id="new-key"
-                    type="password"
-                    placeholder="sk-..."
-                    value={newAPIKey}
-                    onChange={(e) => setNewAPIKey(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="new-models">Models (comma-separated)</Label>
-                  <Input
-                    id="new-models"
-                    placeholder="claude-sonnet-4-20250514, claude-3-haiku-20240307"
-                    value={newModels}
-                    onChange={(e) => setNewModels(e.target.value)}
-                  />
-                </div>
-                <div className="flex gap-2 pt-2">
-                  <Button size="sm" onClick={addProvider} disabled={!newName.trim()}>
-                    <Plus size={16} weight="bold" />
-                    Add
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setShowAdd(false)
-                      setNewName("")
-                      setNewBaseURL("")
-                      setNewAPIKey("")
-                      setNewModels("")
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
+                  <div className="flex gap-2 pt-2">
+                    <Button size="sm" onClick={addProvider} disabled={!newName.trim()}>
+                      <Plus size={16} weight="bold" />
+                      Add
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setShowAdd(false)
+                        setNewName("")
+                        setNewBaseURL("")
+                        setNewAPIKey("")
+                        setNewModels("")
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {/* Provider cards */}
         {providerEntries.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
@@ -309,7 +374,7 @@ export default function ConfigPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => removeProvider(name)}
+                          onClick={() => setDeleteProvider(name)}
                           className="h-8 w-8 text-muted-foreground hover:text-destructive"
                         >
                           <Trash size={16} />
@@ -347,18 +412,76 @@ export default function ConfigPage() {
                     <Separator />
 
                     <div className="space-y-2">
-                      <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Robot size={14} />
-                        Models
-                      </Label>
+                      <div className="flex items-center justify-between">
+                        <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Robot size={14} />
+                          Models
+                        </Label>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setAddingModelFor(addingModelFor === name ? null : name)}
+                          className="h-6 text-xs text-muted-foreground"
+                        >
+                          <Plus size={12} />
+                          Add
+                        </Button>
+                      </div>
+
+                      <AnimatePresence>
+                        {addingModelFor === name && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="flex gap-2"
+                          >
+                            <Input
+                              placeholder="model-name"
+                              value={newModelInput}
+                              onChange={(e) => setNewModelInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  addModel(name, newModelInput)
+                                } else if (e.key === "Escape") {
+                                  setAddingModelFor(null)
+                                  setNewModelInput("")
+                                }
+                              }}
+                              className="h-8 text-sm"
+                              autoFocus
+                            />
+                            <Button
+                              size="sm"
+                              onClick={() => addModel(name, newModelInput)}
+                              disabled={!newModelInput.trim()}
+                              className="h-8"
+                            >
+                              Add
+                            </Button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
                       <div className="flex flex-wrap gap-1.5">
                         {provider.models?.map((model) => (
                           <Badge
                             key={model}
                             variant={model === provider.default_model ? "default" : "muted"}
-                            className="font-mono text-[11px]"
+                            className="font-mono text-[11px] cursor-pointer group relative pr-5"
+                            onClick={() => setDefaultModel(name, model)}
+                            title={model === provider.default_model ? "Default model" : "Click to set as default"}
                           >
                             {model}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                removeModel(name, model)
+                              }}
+                              className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
+                            >
+                              <X size={10} weight="bold" />
+                            </button>
                           </Badge>
                         ))}
                         {(!provider.models || provider.models.length === 0) && (
@@ -376,7 +499,6 @@ export default function ConfigPage() {
         )}
       </motion.div>
 
-      {/* Save button */}
       <motion.div variants={fadeUp} transition={{ duration: 0.3 }}>
         <Separator className="mb-6" />
         <div className="flex items-center justify-end gap-3">
@@ -389,6 +511,26 @@ export default function ConfigPage() {
           </Button>
         </div>
       </motion.div>
+
+      <AlertDialog open={!!deleteProvider} onOpenChange={() => setDeleteProvider(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Provider</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deleteProvider}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteProvider && removeProvider(deleteProvider)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   )
 }

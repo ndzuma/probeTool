@@ -12,6 +12,8 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/ndzuma/probeTool/internal/config"
+	"github.com/ndzuma/probeTool/internal/db"
+	"github.com/ndzuma/probeTool/internal/findings"
 )
 
 var (
@@ -47,25 +49,21 @@ func getAgentPath() (string, error) {
 }
 
 func RunProbe(ctx context.Context, args ProbeArgs) (string, error) {
-	// Get current directory (repo being audited)
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("failed to get working directory: %w", err)
 	}
 
-	// Get agent script path
 	agentScript, err := getAgentPath()
 	if err != nil {
 		return "", err
 	}
 
-	// Load config
 	cfg, err := config.Load()
 	if err != nil {
 		return "", fmt.Errorf("config load failed: %w\nRun: probe config add-provider openrouter", err)
 	}
 
-	// Determine provider
 	provider := args.Provider
 	if provider == "" {
 		if cfg.Default != "" {
@@ -75,7 +73,6 @@ func RunProbe(ctx context.Context, args ProbeArgs) (string, error) {
 		}
 	}
 
-	// Get provider config
 	providerCfg, ok := cfg.Providers[provider]
 	if !ok {
 		return "", fmt.Errorf("provider '%s' not configured\nRun: probe config add-provider %s", provider, provider)
@@ -85,7 +82,6 @@ func RunProbe(ctx context.Context, args ProbeArgs) (string, error) {
 		return "", fmt.Errorf("API key missing for provider '%s'\nRun: probe config set-key %s <key>", provider, provider)
 	}
 
-	// Determine model
 	model := args.Model
 	if model == "" {
 		model = providerCfg.DefaultModel
@@ -94,16 +90,24 @@ func RunProbe(ctx context.Context, args ProbeArgs) (string, error) {
 		}
 	}
 
-	// Generate probe ID
 	id := fmt.Sprintf("%s-%s", time.Now().Format("2006-01-02-150405"), args.Type)
 
-	// Probes directory
 	homeDir, _ := os.UserHomeDir()
 	probesDir := filepath.Join(homeDir, ".probe", "probes")
 	os.MkdirAll(probesDir, 0755)
 	mdPath := filepath.Join(probesDir, id+".md")
 
 	absPath, _ := filepath.Abs(mdPath)
+
+	database, err := db.InitDB(db.DBPath())
+	if err != nil {
+		return "", fmt.Errorf("failed to initialize database: %w", err)
+	}
+	defer database.Close()
+
+	if err := db.InsertProbe(database, id, args.Type, cwd, absPath); err != nil {
+		return "", fmt.Errorf("failed to insert probe: %w", err)
+	}
 
 	fmt.Printf("%s Starting probe audit...\n", cyan("🔍"))
 	fmt.Printf("  Target: %s\n", cwd)
@@ -119,7 +123,6 @@ func RunProbe(ctx context.Context, args ProbeArgs) (string, error) {
 		"--verbose="+fmt.Sprintf("%t", args.Verbose),
 	)
 
-	// Set OpenRouter env vars
 	cmd.Env = append(os.Environ(),
 		"ANTHROPIC_BASE_URL=https://openrouter.ai/api",
 		"ANTHROPIC_AUTH_TOKEN="+providerCfg.APIKey,
@@ -131,7 +134,6 @@ func RunProbe(ctx context.Context, args ProbeArgs) (string, error) {
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
 
-	// Progress handler
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
@@ -156,7 +158,6 @@ func RunProbe(ctx context.Context, args ProbeArgs) (string, error) {
 					fmt.Printf("%s Compiling security report...\n", green("📝"))
 				}
 			} else if strings.HasPrefix(line, "VERBOSE:") {
-				// Handle verbose logs
 				if args.Verbose {
 					msg := strings.TrimPrefix(line, "VERBOSE:")
 					fmt.Printf("%s %s\n", blue("🔍"), msg)
@@ -178,17 +179,35 @@ func RunProbe(ctx context.Context, args ProbeArgs) (string, error) {
 	}()
 
 	if err := cmd.Start(); err != nil {
+		db.UpdateProbeStatus(database, id, "failed")
 		return "", fmt.Errorf("failed to start probe: %w", err)
 	}
 
 	if err := cmd.Wait(); err != nil {
+		db.UpdateProbeStatus(database, id, "failed")
 		return "", fmt.Errorf("probe failed: %w", err)
 	}
 
-	url := fmt.Sprintf("http://localhost:3030/probes/%s", id)
+	if err := db.UpdateProbeStatus(database, id, "completed"); err != nil {
+		fmt.Printf("%s Warning: failed to update probe status: %v\n", yellow("⚠️"), err)
+	}
+
+	if fileContent, err := os.ReadFile(absPath); err == nil {
+		parsedFindings := findings.ParseMarkdown(string(fileContent))
+		for _, f := range parsedFindings {
+			if err := db.InsertFinding(database, f.ID, id, f.Text, f.Severity); err != nil {
+				fmt.Printf("%s Warning: failed to insert finding: %v\n", yellow("⚠️"), err)
+			}
+		}
+		if len(parsedFindings) > 0 {
+			fmt.Printf("%s Extracted %d findings from report\n", green("📋"), len(parsedFindings))
+		}
+	}
+
+	url := fmt.Sprintf("http://localhost:37330/probes/%s", id)
 	fmt.Println()
 	fmt.Printf("%s View assessment: %s\n", green("🔗"), cyan(url))
 	fmt.Printf("%s Report saved: %s\n", green("📄"), absPath)
 
-	return url, nil
+	return id, nil
 }

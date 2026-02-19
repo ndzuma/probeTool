@@ -19,6 +19,9 @@ const plexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "probeTool — Audit Dashboard",
   description: "Code security audit dashboard",
+  appleWebApp: {
+    title: "pobeTool",
+  },
 };
 
 export default function RootLayout({

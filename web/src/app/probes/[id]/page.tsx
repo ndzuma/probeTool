@@ -16,9 +16,10 @@ import {
   Info,
   ShieldWarning,
   Spinner,
+  Trash,
 } from "@phosphor-icons/react";
 
-import { getProbe, type Probe } from "@/lib/api";
+import { getProbe, deleteFinding as deleteFindingAPI, type Probe } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -161,6 +162,17 @@ export default function ProbeDetailPage() {
           f.id === findingId ? { ...f, completed: !f.completed } : f,
         ),
       );
+    }
+  };
+
+  const handleDeleteFinding = async (findingId: string) => {
+    const previous = findings;
+    setFindings((prev) => prev.filter((f) => f.id !== findingId));
+
+    try {
+      await deleteFindingAPI(findingId);
+    } catch {
+      setFindings(previous);
     }
   };
 
@@ -359,21 +371,24 @@ export default function ProbeDetailPage() {
                 <ScrollArea className="max-h-[65vh]">
                   <div className="divide-y divide-border">
                     {findings.map((finding, index) => (
-                      <motion.button
+                      <motion.div
                         key={finding.id}
                         initial={{ opacity: 0, y: 6 }}
                         animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
                         transition={{
                           duration: 0.2,
                           delay: index * 0.03,
                         }}
-                        onClick={() => toggleFinding(finding.id)}
                         className={cn(
-                          "flex items-start gap-3 w-full px-4 py-3 text-left transition-all duration-200 hover:bg-muted/30 cursor-pointer group",
+                          "flex items-start gap-3 w-full px-4 py-3 text-left transition-all duration-200 hover:bg-muted/30 group",
                           finding.completed && "opacity-60",
                         )}
                       >
-                        <div className="mt-0.5 shrink-0">
+                        <button
+                          onClick={() => toggleFinding(finding.id)}
+                          className="mt-0.5 shrink-0 cursor-pointer"
+                        >
                           {finding.completed ? (
                             <CheckCircle
                               size={20}
@@ -387,7 +402,7 @@ export default function ProbeDetailPage() {
                               className="text-muted-foreground transition-all duration-200 group-hover:text-primary group-hover:scale-110"
                             />
                           )}
-                        </div>
+                        </button>
                         <div className="flex-1 min-w-0">
                           <p
                             className={cn(
@@ -408,8 +423,17 @@ export default function ProbeDetailPage() {
                           >
                             {finding.severity}
                           </Badge>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteFinding(finding.id);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-destructive cursor-pointer"
+                          >
+                            <Trash size={14} />
+                          </button>
                         </div>
-                      </motion.button>
+                      </motion.div>
                     ))}
                   </div>
                 </ScrollArea>
