@@ -1,6 +1,21 @@
-.PHONY: probe install setup test clean
+.PHONY: probe probe-only install setup test clean web web-deps web-build dev-web dev-api clean-web clean-all
 
-probe:
+# ─── Web Dashboard ───────────────────────────────────────────────────────────
+
+web-deps:
+	cd web && npm install
+
+web-build: web-deps
+	cd web && npm run build
+
+web: web-build
+
+# ─── Go Binary ───────────────────────────────────────────────────────────────
+
+probe: web
+	go build -o probe ./cmd/probe
+
+probe-only:
 	go build -o probe ./cmd/probe
 
 install: probe
@@ -10,9 +25,26 @@ install: probe
 setup:
 	./probe setup
 
+# ─── Test ────────────────────────────────────────────────────────────────────
+
 test:
 	cd ~/test-repo && probe --full
+
+# ─── Dev ─────────────────────────────────────────────────────────────────────
+
+dev-web:
+	cd web && npm run dev
+
+dev-api: probe-only
+	./probe
+
+# ─── Clean ───────────────────────────────────────────────────────────────────
 
 clean:
 	rm -f probe
 	rm -rf ~/.probe/probes/*.md
+
+clean-web:
+	rm -rf web/.next web/out
+
+clean-all: clean clean-web
