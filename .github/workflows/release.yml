@@ -124,14 +124,22 @@ jobs:
       
       - name: Build binary
         env:
+          GOOS: windows
+          GOARCH: amd64
           CGO_ENABLED: 1
+        shell: bash
         run: |
-          $VERSION = $env:GITHUB_REF -replace 'refs/tags/', ''
-          $COMMIT = $env:GITHUB_SHA.Substring(0,7)
-          $BUILD_DATE = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+          VERSION="${GITHUB_REF#refs/tags/}"
+          COMMIT="${GITHUB_SHA::7}"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           
-          go build -ldflags "-s -w -X github.com/ndzuma/probeTool/internal/version.Version=$VERSION -X github.com/ndzuma/probeTool/internal/version.Commit=$COMMIT -X github.com/ndzuma/probeTool/internal/version.BuildDate=$BUILD_DATE" -o probe.exe ./cmd/probe
-          Compress-Archive -Path probe.exe -DestinationPath "probeTool_${VERSION}_windows_amd64.zip"
+          go build -ldflags "-s -w \
+            -X github.com/ndzuma/probeTool/internal/version.Version=${VERSION} \
+            -X github.com/ndzuma/probeTool/internal/version.Commit=${COMMIT} \
+            -X github.com/ndzuma/probeTool/internal/version.BuildDate=${BUILD_DATE}" \
+            -o probe.exe ./cmd/probe
+          
+          7z a probeTool_${VERSION}_windows_amd64.zip probe.exe
       
       - uses: actions/upload-artifact@v4
         with:
@@ -147,27 +155,77 @@ jobs:
         with:
           fetch-depth: 0
       
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          path: dist
+          path: artifacts
       
-      - name: Flatten artifacts
+      - name: Generate Changelog
+        id: changelog
         run: |
-          mkdir -p release
-          find dist -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec mv {} release/ \;
-          ls -la release/
-      
-      - name: Generate checksums
-        run: |
-          cd release
-          shasum -a 256 * > checksums.txt
+          VERSION="${GITHUB_REF#refs/tags/}"
+          PREV_TAG=$(git describe --tags --abbrev=0 ${VERSION}^ 2>/dev/null || echo "")
+          
+          echo "## probeTool $VERSION" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "AI-powered security scanning tool with web dashboard." >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "### 📥 Quick Install" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo '```bash' >> CHANGELOG.md
+          echo 'curl -sSL https://raw.githubusercontent.com/ndzuma/probeTool/main/install.sh | bash' >> CHANGELOG.md
+          echo '```' >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          
+          if [ -n "$PREV_TAG" ]; then
+            echo "### 📝 Changes since $PREV_TAG" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            
+            # Categorize commits
+            git log ${PREV_TAG}..${VERSION} --pretty=format:"%s" | \
+            while read line; do
+              if echo "$line" | grep -qiE "^feat:"; then
+                echo "- 🚀 $(echo $line | sed 's/^feat: //')" >> features.txt
+              elif echo "$line" | grep -qiE "^fix:"; then
+                echo "- 🐛 $(echo $line | sed 's/^fix: //')" >> fixes.txt
+              elif echo "$line" | grep -qiE "^docs:"; then
+                echo "- 📝 $(echo $line | sed 's/^docs: //')" >> docs.txt
+              fi
+            done
+            
+            [ -f features.txt ] && echo "#### Features" >> CHANGELOG.md && cat features.txt >> CHANGELOG.md && echo "" >> CHANGELOG.md
+            [ -f fixes.txt ] && echo "#### Bug Fixes" >> CHANGELOG.md && cat fixes.txt >> CHANGELOG.md && echo "" >> CHANGELOG.md
+            [ -f docs.txt ] && echo "#### Documentation" >> CHANGELOG.md && cat docs.txt >> CHANGELOG.md && echo "" >> CHANGELOG.md
+          fi
+          
+          echo "---" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "**Full Changelog**: https://github.com/ndzuma/probeTool/compare/${PREV_TAG}...${VERSION}" >> CHANGELOG.md
       
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: release/*
+          body_path: CHANGELOG.md
+          files: |
+            artifacts/macos-amd64/*.tar.gz
+            artifacts/macos-arm64/*.tar.gz
+            artifacts/linux-amd64/*.tar.gz
+            artifacts/windows-amd64/*.zip
           draft: false
-          generate_release_notes: true
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Generate Checksums
+        run: |
+          cd artifacts
+          find . -name "*.tar.gz" -o -name "*.zip" | while read file; do
+            sha256sum "$file" >> ../checksums.txt
+          done
+          cd ..
+      
+      - name: Upload Checksums
+        uses: softprops/action-gh-release@v1
+        with:
+          files: checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
