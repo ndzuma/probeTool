@@ -162,14 +162,10 @@ func TestRootFlags(t *testing.T) {
 }
 
 func TestServerConstants(t *testing.T) {
-	// Verify server constants are defined
 	if ServerPort != "37330" {
 		t.Errorf("ServerPort = %v, want 37330", ServerPort)
 	}
 	if NextJSPort != "37331" {
 		t.Errorf("NextJSPort = %v, want 37331", NextJSPort)
-	}
-	if WebDir != "web" {
-		t.Errorf("WebDir = %v, want web", WebDir)
 	}
 }

@@ -1,3 +1,5 @@
+//go:build !nodedebug
+
 package runtime
 
 import (
@@ -8,12 +10,6 @@ import (
 	"path/filepath"
 	"runtime"
 )
-
-//go:embed node-*
-var nodeFS embed.FS
-
-//go:embed web
-var webFS embed.FS
 
 // NodePath returns the path to the bundled Node.js binary
 func NodePath() (string, error) {

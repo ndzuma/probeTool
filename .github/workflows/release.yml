@@ -90,7 +90,7 @@ jobs:
       - name: Bundle Node.js runtime
         run: |
           chmod +x scripts/bundle-node.sh
-          ./scripts/bundle-node.sh darwin ${{ matrix.arch }}
+          ./scripts/bundle-node.sh linux amd64
       
       - name: Bundle web directory
         run: |
@@ -142,9 +142,10 @@ jobs:
           node-version: '20'
       
       - name: Bundle Node.js runtime
+        shell: bash
         run: |
           chmod +x scripts/bundle-node.sh
-          ./scripts/bundle-node.sh darwin ${{ matrix.arch }}
+          ./scripts/bundle-node.sh windows amd64
       
       - name: Bundle web directory
         run: |
