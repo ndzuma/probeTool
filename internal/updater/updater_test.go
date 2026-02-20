@@ -209,17 +209,14 @@ func TestCheckForUpdate(t *testing.T) {
 }
 
 func TestCheckForUpdateNoUpdateAvailable(t *testing.T) {
-	currentVersion := version.GetInfo().Version
-	versionWithoutV := strings.TrimPrefix(currentVersion, "v")
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{
-			"tag_name": "` + versionWithoutV + `",
+			"tag_name": "v0.1.0",
 			"name": "Current Release",
 			"body": "Current",
-			"html_url": "https://github.com/ndzuma/probeTool/releases/tag/v` + versionWithoutV + `",
+			"html_url": "https://github.com/ndzuma/probeTool/releases/tag/v0.1.0",
 			"assets": []
 		}`))
 	}))
@@ -228,6 +225,10 @@ func TestCheckForUpdateNoUpdateAvailable(t *testing.T) {
 	originalURL := githubAPIURL
 	githubAPIURL = server.URL
 	defer func() { githubAPIURL = originalURL }()
+
+	originalVersion := version.Version
+	version.Version = "0.1.0"
+	defer func() { version.Version = originalVersion }()
 
 	info, err := CheckForUpdate()
 	if err != nil {
@@ -483,6 +484,18 @@ func TestUpdateCacheStruct(t *testing.T) {
 }
 
 func TestReadCacheNoFile(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "probe-readcache-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	originalPath := getCacheFilePath
+	getCacheFilePath = func() string {
+		return filepath.Join(tempDir, cacheFileName)
+	}
+	defer func() { getCacheFilePath = originalPath }()
+
 	cache, err := ReadCache()
 	if err == nil {
 		t.Error("ReadCache() should return error when no cache file exists")
@@ -602,5 +615,63 @@ func TestClearCacheNoFile(t *testing.T) {
 	err = ClearCache()
 	if err == nil {
 		t.Error("ClearCache() should return error when file doesn't exist")
+	}
+}
+
+func TestIsVersionNewer(t *testing.T) {
+	tests := []struct {
+		name     string
+		remote   string
+		local    string
+		expected bool
+	}{
+		{"same version", "0.1.5", "0.1.5", false},
+		{"remote newer patch", "0.1.6", "0.1.5", true},
+		{"remote older patch", "0.1.4", "0.1.5", false},
+		{"remote newer minor", "0.2.0", "0.1.5", true},
+		{"remote older minor", "0.0.9", "0.1.5", false},
+		{"remote newer major", "1.0.0", "0.1.5", true},
+		{"remote older major", "0.9.9", "1.0.0", false},
+		{"remote beta vs local beta", "0.1.5-beta", "0.1.4-beta", true},
+		{"remote older with pre", "0.1.4-alpha.2", "0.1.5-beta", false},
+		{"remote newer with pre", "0.1.6-alpha", "0.1.5-beta", true},
+		{"remote release vs local pre", "0.1.5", "0.1.5-beta", true},
+		{"remote pre vs local release", "0.1.5-beta", "0.1.5", false},
+		{"both same with pre", "0.1.5-beta", "0.1.5-beta", false},
+		{"with v prefix remote", "v0.1.6", "0.1.5", true},
+		{"with v prefix local", "0.1.6", "v0.1.5", true},
+		{"dev version", "0.1.5", "dev", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isVersionNewer(tt.remote, tt.local)
+			if result != tt.expected {
+				t.Errorf("isVersionNewer(%q, %q) = %v, want %v", tt.remote, tt.local, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParseVersion(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected [4]string
+	}{
+		{"0.1.5", [4]string{"0", "1", "5", ""}},
+		{"v0.1.5", [4]string{"0", "1", "5", ""}},
+		{"0.1.5-beta", [4]string{"0", "1", "5", "beta"}},
+		{"v0.1.5-alpha.2", [4]string{"0", "1", "5", "alpha.2"}},
+		{"1.0.0", [4]string{"1", "0", "0", ""}},
+		{"dev", [4]string{"dev", "0", "0", ""}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := parseVersion(tt.input)
+			if result != tt.expected {
+				t.Errorf("parseVersion(%q) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
 	}
 }

@@ -197,7 +197,7 @@ func CheckForUpdate() (*UpdateInfo, error) {
 	latestVersion := strings.TrimPrefix(release.TagName, "v")
 	currentVersionClean := strings.TrimPrefix(currentVersion, "v")
 
-	hasUpdate := latestVersion != currentVersionClean
+	hasUpdate := isVersionNewer(latestVersion, currentVersionClean)
 
 	downloadURL := findAssetURL(release)
 
@@ -210,6 +210,58 @@ func CheckForUpdate() (*UpdateInfo, error) {
 		AssetName:      getExactAssetName(release.TagName),
 		ReleasePageURL: release.HTMLURL,
 	}, nil
+}
+
+func isVersionNewer(remote, local string) bool {
+	if local == "dev" {
+		return true
+	}
+
+	remoteParts := parseVersion(remote)
+	localParts := parseVersion(local)
+
+	for i := 0; i < 3; i++ {
+		if remoteParts[i] > localParts[i] {
+			return true
+		}
+		if remoteParts[i] < localParts[i] {
+			return false
+		}
+	}
+
+	remotePre := remoteParts[3]
+	localPre := localParts[3]
+
+	if remotePre == "" && localPre == "" {
+		return false
+	}
+	if remotePre == "" && localPre != "" {
+		return true
+	}
+	if remotePre != "" && localPre == "" {
+		return false
+	}
+
+	return remotePre > localPre
+}
+
+func parseVersion(v string) [4]string {
+	v = strings.TrimPrefix(v, "v")
+
+	parts := strings.SplitN(v, "-", 2)
+	mainParts := strings.Split(parts[0], ".")
+
+	result := [4]string{"0", "0", "0", ""}
+
+	for i := 0; i < 3 && i < len(mainParts); i++ {
+		result[i] = strings.TrimSpace(mainParts[i])
+	}
+
+	if len(parts) > 1 {
+		result[3] = parts[1]
+	}
+
+	return result
 }
 
 func getAssetName() string {
