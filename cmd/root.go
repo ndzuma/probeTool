@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -11,16 +10,18 @@ import (
 	"github.com/ndzuma/probeTool/internal/db"
 	"github.com/ndzuma/probeTool/internal/paths"
 	"github.com/ndzuma/probeTool/internal/prober"
+	"github.com/ndzuma/probeTool/internal/process"
 	"github.com/ndzuma/probeTool/internal/version"
 	"github.com/spf13/cobra"
 )
 
 var (
-	fullFlag    bool
-	quickFlag   bool
-	modelFlag   string
-	verboseFlag bool
-	versionFlag bool
+	fullFlag     bool
+	quickFlag    bool
+	modelFlag    string
+	verboseFlag  bool
+	versionFlag  bool
+	overrideFlag bool
 )
 
 var rootCmd = &cobra.Command{
@@ -28,7 +29,6 @@ var rootCmd = &cobra.Command{
 	Short: "Probe tool for code analysis",
 	Long:  `A CLI tool to perform probes on codebases and view results via web interface.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Check if -v flag is used
 		if versionFlag {
 			info := version.GetInfo()
 			fmt.Println(info.String())
@@ -44,8 +44,8 @@ func init() {
 	rootCmd.Flags().StringVar(&modelFlag, "model", "", "Override the default model")
 	rootCmd.Flags().BoolVar(&verboseFlag, "verbose", false, "Enable verbose output")
 	rootCmd.Flags().BoolVarP(&versionFlag, "version", "v", false, "Show version")
+	rootCmd.Flags().BoolVarP(&overrideFlag, "override", "o", false, "Run probe without server running")
 
-	// Make --full the default if no other flag is set
 	rootCmd.PreRun = func(cmd *cobra.Command, args []string) {
 		if !fullFlag && !quickFlag {
 			fullFlag = true
@@ -54,12 +54,11 @@ func init() {
 }
 
 func Execute() {
-	// Auto-migrate if needed (silent, one-time)
 	if paths.NeedsMigration() {
-		fmt.Println("🔄 First run with new version - migrating config...")
+		fmt.Println("First run with new version - migrating config...")
 		if err := paths.Migrate(); err != nil {
-			fmt.Printf("⚠️  Migration warning: %v\n", err)
-			fmt.Println("💡 You can run 'probe migrate' manually if needed")
+			fmt.Printf("Migration warning: %v\n", err)
+			fmt.Println("You can run 'probe migrate' manually if needed")
 		}
 		fmt.Println()
 	}
@@ -71,6 +70,19 @@ func Execute() {
 }
 
 func runProbe() {
+	if !process.IsServerRunning() && !overrideFlag {
+		fmt.Println("Server is not running.")
+		fmt.Println()
+		fmt.Println("Start the server with:")
+		fmt.Println("  probe serve --quiet")
+		fmt.Println()
+		fmt.Println("Or run in system tray:")
+		fmt.Println("  probe tray")
+		fmt.Println()
+		fmt.Println("To run probe without the server, use --override or -o")
+		os.Exit(1)
+	}
+
 	probeType := "full"
 	if quickFlag {
 		probeType = "quick"
@@ -78,12 +90,10 @@ func runProbe() {
 
 	database, err := db.InitDB(db.DBPath())
 	if err != nil {
-		fmt.Printf("❌ Error initializing database: %v\n", err)
+		fmt.Printf("Error initializing database: %v\n", err)
 		os.Exit(1)
 	}
 	defer database.Close()
-
-	checkDashboard()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -104,19 +114,12 @@ func runProbe() {
 
 	probeID, err := prober.RunProbe(ctx, args)
 	if err != nil {
-		fmt.Printf("❌ Error: %v\n", err)
+		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("✅ Security audit complete!")
-	fmt.Printf("🔗 View: http://localhost:37330/probes/%s\n", probeID)
-}
-
-func checkDashboard() {
-	resp, err := http.Get("http://localhost:37330/api/health")
-	if err != nil {
-		fmt.Println("💡 Tip: Run 'probe serve' in another terminal to view results in the dashboard")
-		return
+	fmt.Println("Security audit complete!")
+	if process.IsServerRunning() {
+		fmt.Printf("View: http://localhost:%s/probes/%s\n", process.ServerPort, probeID)
 	}
-	defer resp.Body.Close()
 }
