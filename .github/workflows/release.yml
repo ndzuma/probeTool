@@ -1,0 +1,125 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  test:
+    name: Run Tests
+    uses: ./.github/workflows/test.yml
+
+  build:
+    name: Build ${{ matrix.os }}
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Build web frontend
+        run: |
+          cd web
+          npm ci
+          npm run build
+      
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          COMMIT="${GITHUB_SHA::7}"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          
+          LDFLAGS="-s -w \
+            -X github.com/ndzuma/probeTool/internal/version.Version=${VERSION} \
+            -X github.com/ndzuma/probeTool/internal/version.Commit=${COMMIT} \
+            -X github.com/ndzuma/probeTool/internal/version.BuildDate=${BUILD_DATE}"
+          
+          go build -ldflags "${LDFLAGS}" -o probe${{ matrix.goos == 'windows' && '.exe' || '' }} ./cmd/probe
+      
+      - name: Create archive
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          ARCHIVE_NAME="probeTool_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}"
+          
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip "${ARCHIVE_NAME}.zip" probe.exe
+          else
+            tar -czf "${ARCHIVE_NAME}.tar.gz" probe
+          fi
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: probeTool-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: probeTool_*
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+      
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release
+          find dist -type f -name "probeTool_*" -exec mv {} release/ \;
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

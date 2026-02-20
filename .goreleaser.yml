@@ -1,0 +1,118 @@
+version: 2
+
+before:
+  hooks:
+    # Build Next.js frontend before building Go binary
+    - cd web && npm ci && npm run build
+
+builds:
+  - id: probeTool
+    main: ./cmd/probe
+    binary: probe
+    
+    env:
+      - CGO_ENABLED=1
+    
+    goos:
+      - linux
+      - darwin
+      - windows
+    
+    goarch:
+      - amd64
+      - arm64
+    
+    # Ignore invalid combinations
+    ignore:
+      - goos: windows
+        goarch: arm64
+    
+    # Inject version info
+    ldflags:
+      - -s -w
+      - -X github.com/ndzuma/probeTool/internal/version.Version={{.Version}}
+      - -X github.com/ndzuma/probeTool/internal/version.Commit={{.ShortCommit}}
+      - -X github.com/ndzuma/probeTool/internal/version.BuildDate={{.Date}}
+
+archives:
+  - id: probeTool
+    format: tar.gz
+    
+    # Use zip for Windows
+    format_overrides:
+      - goos: windows
+        format: zip
+    
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    
+    files:
+      - LICENSE*
+      - README*
+      - CHANGELOG*
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-dev"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Others
+      order: 999
+
+release:
+  github:
+    owner: ndzuma
+    name: probeTool
+  
+  draft: false
+  prerelease: auto
+  mode: replace
+  
+  header: |
+    ## probeTool {{ .Tag }}
+    
+    Download the appropriate binary for your platform below.
+    
+    ### Installation
+    
+    **macOS/Linux:**
+    ```bash
+    # Extract and move to PATH
+    tar -xzf probeTool_*_darwin_arm64.tar.gz
+    sudo mv probe /usr/local/bin/
+    ```
+    
+    **Windows:**
+    ```powershell
+    # Extract zip and add to PATH
+    ```
+    
+    ### Homebrew (macOS)
+    ```bash
+    brew tap ndzuma/probetool
+    brew install probetool
+    ```
+  
+  footer: |
+    **Full Changelog**: https://github.com/ndzuma/probeTool/compare/{{ .PreviousTag }}...{{ .Tag }}

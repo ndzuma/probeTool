@@ -1,7 +1,9 @@
 # probeTool - Go CLI + Next.js + Claude SDK
 # ============================================
 
-# OS generated files
+# ============================================
+# OS Generated Files
+# ============================================
 .DS_Store
 .DS_Store?
 ._*
@@ -9,69 +11,231 @@
 .Trashes
 ehthumbs.db
 Thumbs.db
+Desktop.ini
 
+# Windows
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# ============================================
 # Go
+# ============================================
+# Binaries
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-testdata/
-
-# Go workspaces
-go.work
-go.work.buildinfo
-
-# Go build cache
-/.cache/
-
-# probeTool specific
-# ==================
-audits/
-audits.db
-probes.db
-probes/*.md
 probe
 probe.exe
 
-# Node.js (agent/)
-**/agent/node_modules/
-**/agent/npm-debug.log*
-**/agent/yarn-debug.log*
-**/agent/yarn-error.log*
+# Test binary, built with `go test -c`
+*.test
 
-# API Keys & Secrets
+# Output of the go coverage tool
+*.out
+coverage.txt
+coverage.html
+
+# Go workspace file
+go.work
+go.work.sum
+go.work.buildinfo
+
+# Go build cache
+.cache/
+bin/
+vendor/
+
+# Dependency directories
+testdata/
+
+# ============================================
+# GoReleaser
+# ============================================
+dist/
+*.tar.gz
+*.zip
+checksums.txt
+
+# ============================================
+# probeTool Specific
+# ============================================
+# Database files
+*.db
+audits.db
+probes.db
+
+# Probe reports
+probes/*.md
+audits/*.md
+
+# Config (keep structure, ignore actual configs)
+# Uncomment if you don't want to commit configs:
+# config.json
+# config.yaml
+
+# ============================================
+# Node.js (agent/ and web/)
+# ============================================
+node_modules/
+**/node_modules/
+
+# npm/yarn logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# npm package lock (if using yarn)
+# package-lock.json
+
+# Yarn
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*
+
+# Build outputs
+dist/
+build/
+
+# ============================================
+# Next.js (web/)
+# ============================================
+.next/
+out/
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+
+# ============================================
+# Environment Variables & Secrets
+# ============================================
 .env
+.env.*
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
-agent/.env
+*.key
+*.pem
 
+# API keys
+anthropic_key.txt
+openai_key.txt
+
+# ============================================
 # Claude SDK
-#.claude/
-#skills/
-#*.claudeignore
+# ============================================
+# Uncomment to ignore Claude cache:
+# .claude/.cache/
+# .claude/tmp/
 
-# Next.js (web/)
-**/web/.next/
-**/web/out/
-**/web/node_modules/
-**/web/npm-debug.log*
-**/web/.env*
-**/web/.env.local*
+# ============================================
+# Testing
+# ============================================
+coverage/
+*.cover
+.nyc_output/
+htmlcov/
+.pytest_cache/
+.vitest/
 
-# IDE / Editor
-.vscode/settings.json
+# ============================================
+# IDE / Editors
+# ============================================
+# VSCode
+.vscode/
+!.vscode/extensions.json
+!.vscode/launch.json
+*.code-workspace
+
+# JetBrains (GoLand, WebStorm, etc.)
 .idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim
 *.swp
 *.swo
 *~
+.netrwhist
 
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ============================================
 # Logs
+# ============================================
 *.log
 logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# Temporary files
+# ============================================
+# Temporary Files
+# ============================================
 *.tmp
 *.temp
+tmp/
+temp/
+*.bak
+*.cache
+*.pid
+*.seed
+*.pid.lock
+
+# ============================================
+# Release Artifacts
+# ============================================
+# GoReleaser
+dist/
+*.snap
+*.deb
+*.rpm
+*.dmg
+*.pkg
+
+# Homebrew tap (if generated locally)
+Formula/*.rb
+
+# ============================================
+# macOS Application Support (User Data)
+# ============================================
+# Don't ignore structure, but ignore user data
+# Uncomment if you don't want local data committed:
+# Library/
+
+# ============================================
+# Documentation Build
+# ============================================
+site/
+docs/_build/
+docs/.doctrees/
+
+# ============================================
+# Miscellaneous
+# ============================================
+.history/
+*.orig
+*.rej
+.*.swp
