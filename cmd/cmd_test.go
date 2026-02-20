@@ -276,19 +276,3 @@ func TestUpdateCommandShortFlag(t *testing.T) {
 		t.Errorf("update --yes shorthand = %v, want y", yesFlag.Shorthand)
 	}
 }
-
-func TestUpdateCommandForceFlag(t *testing.T) {
-	cmd, _, err := rootCmd.Find([]string{"update"})
-	if err != nil {
-		t.Fatalf("update command not found: %v", err)
-	}
-
-	forceFlag := cmd.Flags().Lookup("force")
-	if forceFlag == nil {
-		t.Fatal("update command should have --force flag")
-	}
-
-	if forceFlag.Shorthand != "f" {
-		t.Errorf("update --force shorthand = %v, want f", forceFlag.Shorthand)
-	}
-}

@@ -103,7 +103,7 @@ func (m *Manager) handleUpdateClick() {
 	if m.updateInfo != nil && m.updateInfo.HasUpdate {
 		m.runUpdate()
 	} else {
-		m.checkForUpdates()
+		m.checkForUpdatesNow()
 	}
 }
 
@@ -127,9 +127,29 @@ func (m *Manager) checkInitialUpdate() {
 }
 
 func (m *Manager) checkForUpdates() {
-	systray.SetTooltip("probeTool - Checking for updates...")
+	systray.SetTooltip("probeTool - Running")
 
 	info, err := updater.CheckForUpdateCached()
+	if err != nil {
+		return
+	}
+
+	m.updateInfo = info
+
+	if info.HasUpdate {
+		m.menuItems.update.SetTitle("Update Available (" + info.LatestVersion + ")")
+		m.menuItems.update.SetTooltip("Click to install update " + info.LatestVersion)
+		systray.SetTooltip("probeTool - Update available: " + info.LatestVersion)
+	} else {
+		m.menuItems.update.SetTitle("Check for Updates")
+		m.menuItems.update.SetTooltip("Check if new version is available")
+	}
+}
+
+func (m *Manager) checkForUpdatesNow() {
+	systray.SetTooltip("probeTool - Checking for updates...")
+
+	info, err := updater.CheckForUpdateWithCache()
 	if err != nil {
 		systray.SetTooltip("probeTool - Running")
 		return
@@ -149,7 +169,22 @@ func (m *Manager) checkForUpdates() {
 }
 
 func (m *Manager) runUpdate() {
-	if m.updateInfo == nil || !m.updateInfo.HasUpdate || m.updateInfo.DownloadURL == "" {
+	systray.SetTooltip("probeTool - Verifying update...")
+	m.menuItems.update.SetTitle("Verifying...")
+
+	info, err := updater.CheckForUpdate()
+	if err != nil {
+		systray.SetTooltip("probeTool - Update check failed")
+		m.menuItems.update.SetTitle("Check Failed - Retry")
+		return
+	}
+
+	m.updateInfo = info
+
+	if !info.HasUpdate || info.DownloadURL == "" {
+		systray.SetTooltip("probeTool - Running")
+		m.menuItems.update.SetTitle("Check for Updates")
+		m.menuItems.update.SetTooltip("Check if new version is available")
 		return
 	}
 
@@ -157,7 +192,7 @@ func (m *Manager) runUpdate() {
 	m.menuItems.update.SetTitle("Updating...")
 	m.menuItems.update.Disable()
 
-	err := updater.DownloadAndInstall(m.updateInfo.DownloadURL)
+	err = updater.DownloadAndInstall(info.DownloadURL)
 	if err != nil {
 		systray.SetTooltip("probeTool - Update failed")
 		m.menuItems.update.SetTitle("Update Failed - Retry")

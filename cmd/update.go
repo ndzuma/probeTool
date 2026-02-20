@@ -12,15 +12,14 @@ import (
 )
 
 var (
-	checkOnly  bool
-	forceYes   bool
-	forceCheck bool
+	checkOnly bool
+	forceYes  bool
 )
 
 var updateCmd = &cobra.Command{
 	Use:   "update",
 	Short: "Update probe to the latest version",
-	Long: `Check for updates and install the latest version of probe from GitHub.
+	Long: `Check for updates and install the latest version from GitHub.
 
 Your configuration and data are preserved during the update process.
 Data is stored separately from the binary in your application directory.`,
@@ -33,7 +32,6 @@ func init() {
 	rootCmd.AddCommand(updateCmd)
 	updateCmd.Flags().BoolVar(&checkOnly, "check", false, "Only check for updates, don't install")
 	updateCmd.Flags().BoolVarP(&forceYes, "yes", "y", false, "Skip confirmation prompt")
-	updateCmd.Flags().BoolVarP(&forceCheck, "force", "f", false, "Force check bypassing cache")
 }
 
 func runUpdate() {
@@ -43,14 +41,7 @@ func runUpdate() {
 
 	fmt.Printf("%s Checking for updates...\n\n", yellow("🔍"))
 
-	var info *updater.UpdateInfo
-	var err error
-
-	if forceCheck {
-		info, err = updater.CheckForUpdate()
-	} else {
-		info, err = updater.CheckForUpdateCached()
-	}
+	info, err := updater.CheckForUpdateWithCache()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error checking for updates: %v\n", err)
 		os.Exit(1)
@@ -108,9 +99,22 @@ func runUpdate() {
 		os.Exit(1)
 	}
 
-	if err := updater.DownloadAndInstall(info.DownloadURL); err != nil {
+	fmt.Printf("%s Verifying latest version before update...\n", yellow("🔍"))
+	latestInfo, err := updater.CheckForUpdate()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error verifying update: %v\n", err)
+		os.Exit(1)
+	}
+
+	if latestInfo.DownloadURL == "" {
+		fmt.Fprintf(os.Stderr, "No download available for your platform\n")
+		fmt.Printf("Please download manually from: %s\n", cyan(latestInfo.ReleasePageURL))
+		os.Exit(1)
+	}
+
+	if err := updater.DownloadAndInstall(latestInfo.DownloadURL); err != nil {
 		fmt.Fprintf(os.Stderr, "\nUpdate failed: %v\n", err)
-		fmt.Printf("\nYou can download manually from: %s\n", cyan(info.ReleasePageURL))
+		fmt.Printf("\nYou can download manually from: %s\n", cyan(latestInfo.ReleasePageURL))
 		os.Exit(1)
 	}
 }
