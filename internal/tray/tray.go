@@ -194,6 +194,14 @@ func (m *Manager) runUpdate() {
 
 	err = updater.DownloadAndInstall(info.DownloadURL)
 	if err != nil {
+		errStr := err.Error()
+		if strings.Contains(errStr, "permission denied") || strings.Contains(errStr, "Permission denied") {
+			systray.SetTooltip("probeTool - Needs sudo to update")
+			m.menuItems.update.SetTitle("Run: sudo probe update")
+			m.menuItems.update.SetTooltip("Update requires administrator privileges")
+			m.menuItems.update.Enable()
+			return
+		}
 		systray.SetTooltip("probeTool - Update failed")
 		m.menuItems.update.SetTitle("Update Failed - Retry")
 		m.menuItems.update.Enable()

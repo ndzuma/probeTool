@@ -326,6 +326,15 @@ func DownloadAndInstall(downloadURL string) error {
 	cyan := color.New(color.FgCyan).SprintFunc()
 	yellow := color.New(color.FgYellow).SprintFunc()
 
+	currentExecPath, err := getExecutablePath()
+	if err != nil {
+		return err
+	}
+
+	if err := checkWritePermission(currentExecPath); err != nil {
+		return fmt.Errorf("permission denied: cannot write to %s\n\nRun with sudo:\n  sudo probe update\n\nOr reinstall to a user-writable location:\n  curl -sSL https://raw.githubusercontent.com/ndzuma/probeTool/main/install.sh | bash", currentExecPath)
+	}
+
 	fmt.Printf("%s Downloading update...\n", yellow("⬇"))
 	fmt.Printf("  URL: %s\n", cyan(downloadURL))
 
@@ -365,11 +374,6 @@ func DownloadAndInstall(downloadURL string) error {
 		return fmt.Errorf("failed to extract binary: %w", err)
 	}
 
-	currentExecPath, err := getExecutablePath()
-	if err != nil {
-		return err
-	}
-
 	fmt.Printf("%s Installing update...\n", yellow("🔧"))
 	fmt.Printf("  Current binary: %s\n", cyan(currentExecPath))
 
@@ -379,7 +383,8 @@ func DownloadAndInstall(downloadURL string) error {
 	}
 
 	if err := copyFile(newBinaryPath, currentExecPath); err != nil {
-		fmt.Printf("%s Restore failed, please reinstall manually\n", color.RedString("❌"))
+		copyFile(backupPath, currentExecPath)
+		os.Remove(backupPath)
 		return fmt.Errorf("failed to install new binary: %w", err)
 	}
 
@@ -390,6 +395,22 @@ func DownloadAndInstall(downloadURL string) error {
 	fmt.Printf("\nYour data is preserved at: %s\n", paths.GetAppDir())
 	fmt.Printf("Run 'probe version' to verify the update.\n")
 
+	return nil
+}
+
+func checkWritePermission(path string) error {
+	file, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		if os.IsPermission(err) {
+			return err
+		}
+		if os.IsNotExist(err) {
+			dir := filepath.Dir(path)
+			return os.MkdirAll(dir, 0755)
+		}
+		return nil
+	}
+	file.Close()
 	return nil
 }
 
