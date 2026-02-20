@@ -232,3 +232,47 @@ func TestTrayWSLCheckFlag(t *testing.T) {
 		t.Error("tray command should have --skip-wsl-check flag")
 	}
 }
+
+func TestUpdateCommandExists(t *testing.T) {
+	cmd, _, err := rootCmd.Find([]string{"update"})
+	if err != nil {
+		t.Errorf("update command not found: %v", err)
+	}
+	if cmd == nil {
+		t.Error("update command should exist")
+	}
+	if cmd.Use != "update" {
+		t.Errorf("update command Use = %v, want update", cmd.Use)
+	}
+}
+
+func TestUpdateCommandFlags(t *testing.T) {
+	cmd, _, err := rootCmd.Find([]string{"update"})
+	if err != nil {
+		t.Fatalf("update command not found: %v", err)
+	}
+
+	if cmd.Flags().Lookup("check") == nil {
+		t.Error("update command should have --check flag")
+	}
+
+	if cmd.Flags().Lookup("yes") == nil {
+		t.Error("update command should have --yes flag")
+	}
+}
+
+func TestUpdateCommandShortFlag(t *testing.T) {
+	cmd, _, err := rootCmd.Find([]string{"update"})
+	if err != nil {
+		t.Fatalf("update command not found: %v", err)
+	}
+
+	yesFlag := cmd.Flags().Lookup("yes")
+	if yesFlag == nil {
+		t.Fatal("update command should have --yes flag")
+	}
+
+	if yesFlag.Shorthand != "y" {
+		t.Errorf("update --yes shorthand = %v, want y", yesFlag.Shorthand)
+	}
+}
