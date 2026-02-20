@@ -25,6 +25,8 @@ const (
 	WebDir     = "web"
 )
 
+var quietMode bool
+
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Start the probe dashboard server",
@@ -36,10 +38,13 @@ var serveCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(serveCmd)
+	serveCmd.Flags().BoolVar(&quietMode, "quiet", false, "Suppress startup messages")
 }
 
 func runServe() {
-	fmt.Println("🚀 Starting Probe Dashboard...")
+	if !quietMode {
+		fmt.Println("🚀 Starting Probe Dashboard...")
+	}
 
 	database, err := db.InitDB(db.DBPath())
 	if err != nil {
@@ -89,8 +94,10 @@ func runServe() {
 	}()
 
 	addr := ":" + ServerPort
-	fmt.Printf("\n✅ Dashboard running at http://localhost:%s\n", ServerPort)
-	fmt.Println("   Press Ctrl+C to stop")
+	if !quietMode {
+		fmt.Printf("\n✅ Dashboard running at http://localhost:%s\n", ServerPort)
+		fmt.Println("   Press Ctrl+C to stop")
+	}
 
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		fmt.Printf("❌ Server error: %v\n", err)
@@ -103,7 +110,9 @@ func ensureNextJSReady(webPath string) error {
 
 	nodeModules := filepath.Join(webPath, "node_modules")
 	if _, err := os.Stat(nodeModules); os.IsNotExist(err) {
-		fmt.Println("📦 Installing dependencies...")
+		if !quietMode {
+			fmt.Println("📦 Installing dependencies...")
+		}
 		cmd := exec.Command("npm", "install")
 		cmd.Dir = webPath
 		cmd.Stdout = os.Stdout
@@ -117,7 +126,9 @@ func ensureNextJSReady(webPath string) error {
 	needsBuild := os.IsNotExist(err) || time.Since(buildInfo.ModTime()) > 24*time.Hour
 
 	if needsBuild {
-		fmt.Println("🔨 Building Next.js app...")
+		if !quietMode {
+			fmt.Println("🔨 Building Next.js app...")
+		}
 		cmd := exec.Command("npm", "run", "build")
 		cmd.Dir = webPath
 		cmd.Stdout = os.Stdout
@@ -131,7 +142,9 @@ func ensureNextJSReady(webPath string) error {
 }
 
 func startNextJS(ctx context.Context, webPath string) *exec.Cmd {
-	fmt.Println("🌐 Starting Next.js server...")
+	if !quietMode {
+		fmt.Println("🌐 Starting Next.js server...")
+	}
 
 	cmd := exec.CommandContext(ctx, "npm", "run", "start")
 	cmd.Dir = webPath
