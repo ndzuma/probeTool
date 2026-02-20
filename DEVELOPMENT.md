@@ -27,6 +27,7 @@ probeTool/
 │   ├── tray/                # System tray logic
 │   ├── paths/               # OS-specific paths
 │   ├── process/             # PID file management
+│   ├── updater/             # Self-update functionality
 │   ├── wsl/                 # WSL detection
 │   ├── agent/               # Bundled agent extraction
 │   ├── runtime/             # Bundled runtime extraction
@@ -116,9 +117,70 @@ Tray polls /api/health until ready
   ↓
 Tray tooltip: "probeTool - Running"
   ↓
+Tray starts update polling (every 4 hours)
+  ↓
 User clicks "Open Dashboard" → opens browser
   ↓
+User clicks "Update Available" → downloads and installs update
+  ↓
 User clicks "Quit" → sends SIGINT → server stops → tray exits
+```
+
+---
+
+## Self-Update Flow
+
+```text
+User: probe update
+  ↓
+Check update cache
+  ├─ Recent (< 24h): Use cached result
+  └─ Stale/missing: Query GitHub API
+  ↓
+Compare versions
+  ├─ Same: "Already on latest version"
+  └─ Newer available: Show release notes
+  ↓
+User confirms (or use -y flag)
+  ↓
+Download tar.gz from GitHub releases
+  ↓
+Extract binary to temp directory
+  ↓
+Backup current binary
+  ↓
+Replace with new binary
+  ↓
+Clear update cache
+  ↓
+"Update installed successfully"
+```
+
+**Update Notifications:**
+
+```text
+CLI: Shows notification at start of any command
+  ↓
+  ⚠ Update available: v0.1.5-beta (dev -> v0.1.5-beta)
+    Run probe update to install
+
+Tray: Menu item changes
+  ↓
+  "Check for Updates" → "Update Available (v0.1.5-beta)"
+```
+
+**Update Cache:**
+
+Stored in `~/.../probeTool/update_cache.json`:
+
+```json
+{
+  "last_check_time": "2026-02-20T15:04:05Z",
+  "has_update": true,
+  "latest_version": "v0.1.5-beta",
+  "download_url": "https://github.com/...",
+  "release_page_url": "https://github.com/..."
+}
 ```
 
 ---

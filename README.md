@@ -18,6 +18,7 @@
 - 🔍 **AI-Powered Scanning** - Automated security analysis using Claude AI
 - 📊 **Web Dashboard** - View scan results in a modern Next.js interface
 - 🖥️ **System Tray** - Background operation with menu bar integration (includes server)
+- 🔄 **Auto-Update** - Self-update from GitHub with update notifications
 - 💾 **Local Storage** - SQLite database for scan history
 - 🚀 **Fast & Lightweight** - Single binary with embedded frontend
 - 🔧 **Configurable** - Support for multiple AI providers
@@ -97,9 +98,10 @@ What it does:
 
 - Launches system tray icon in your menu bar
 - Automatically starts dashboard server
+- Polls for updates every 4 hours
 - Provides quick access menu:
   - Open Dashboard
-  - Check for Updates
+  - Update Available (when new version found) / Check for Updates
   - Restart Server
   - View Version
   - Quit
@@ -143,6 +145,8 @@ probe serve               Start dashboard server only
 probe serve --quiet       Start server as background daemon
 probe stop                Stop running server daemon
 probe status              Show server/tray status with PIDs
+probe update              Check for updates and install latest version
+probe update --check      Only check for updates, don't install
 probe config              Manage configuration
 probe setup               Install agent files (runs automatically on first use)
 probe clean               Clean scan reports
@@ -175,6 +179,12 @@ probe -v
 probe version           # Detailed version info
 probe version --json    # JSON format
 
+# Update to latest version
+probe update            # Check and install update
+probe update --check    # Only check for update
+probe update -y         # Skip confirmation prompt
+probe update -f         # Force check bypassing cache
+
 # Configure new provider
 probe config add-provider anthropic
 probe config set-key openrouter sk-...
@@ -196,6 +206,7 @@ probe config list
 ```text
 probeTool/
 ├── config.json          # Provider configuration
+├── update_cache.json    # Cached update check results
 ├── probes/
 │   ├── probes.db        # SQLite database
 │   └── *.md             # Scan reports

@@ -173,6 +173,8 @@ Tray stops server gracefully
 | `probe tray` | `tray.go` | Launch system tray (includes server) |
 | `probe stop` | `stop.go` | Stop running server daemon |
 | `probe status` | `status.go` | Show server/tray status with PIDs |
+| `probe update` | `update.go` | Check for updates and install latest version |
+| `probe update --check` | `update.go` | Only check for updates, don't install |
 | `probe config` | `config.go` | Manage API provider configuration |
 | `probe setup` | `setup.go` | Install agent files from bundled archive |
 | `probe clean` | `clean.go` | Clean scan reports |
@@ -188,6 +190,7 @@ Tray stops server gracefully
 | prober | `internal/prober/` | Scan execution logic |
 | server | `internal/server/` | HTTP server and API handlers |
 | tray | `internal/tray/` | System tray functionality |
+| updater | `internal/updater/` | Self-update functionality |
 | paths | `internal/paths/` | OS-specific path resolution |
 | version | `internal/version/` | Version information |
 | findings | `internal/findings/` | Parsing scan results |
@@ -262,6 +265,7 @@ Determined by `internal/paths/paths.go`:
 ```text
 probeTool/
 ├── config.json          # Provider configuration
+├── update_cache.json    # Cached update check results
 ├── probes/
 │   ├── probes.db        # SQLite database
 │   ├── 2026-02-20-*.md  # Scan reports
@@ -500,57 +504,88 @@ Get version information.
 
 ```text
 probeTool
-├── Open Dashboard         (opens browser)
+├── Open Dashboard              (opens browser)
 ├── ─────────────────
-├── Check for Updates      (placeholder)
+├── Update Available (vX.X.X)   (when update found) / Check for Updates
 ├── ─────────────────
-├── Version dev            (disabled, info only)
-├── Restart Server         (restarts serve subprocess)
-└── Quit                   (stops server, exits)
+├── Version dev                 (disabled, info only)
+├── Restart Server              (restarts serve subprocess)
+└── Quit                        (stops server, exits)
 ```
 
-### Implementation
+### Update Polling
 
-**Files:**
-- `cmd/tray.go` - Command registration
-- `internal/tray/tray.go` - Main tray logic
-- `internal/tray/checks.go` - Server health checks
+The tray automatically polls GitHub for updates every 4 hours:
 
-**Key Functions:**
+- Checks `https://api.github.com/repos/ndzuma/probeTool/releases/latest`
+- Caches result in `update_cache.json` to avoid API rate limits
+- When update available:
+  - Menu changes from "Check for Updates" to "Update Available (vX.X.X)"
+  - Tooltip shows "probeTool - Update available: vX.X.X"
+- Clicking "Update Available" downloads and installs the update
+- After update: Shows "Updated - Restart to Apply"
 
-```go
-// Start tray and server
-func (m *Manager) Start()
+---
 
-// Build menu items
-func (m *Manager) buildMenu()
+## Self-Update
 
-// Handle menu clicks
-func (m *Manager) handleMenuActions()
+### Overview
 
-// Start dashboard server subprocess
-func (m *Manager) startServer() error
+probeTool can update itself from GitHub releases without losing user data.
 
-// Stop server gracefully
-func (m *Manager) stopServer() error
+### CLI Update
 
-// Restart server
-func (m *Manager) restartServer()
+```bash
+# Check for and install updates
+probe update
 
-// Open browser
-func (m *Manager) openBrowser(url string)
+# Only check, don't install
+probe update --check
 
-// Wait for server to be ready
-func (m *Manager) waitForServer(timeout time.Duration) error
+# Skip confirmation prompt
+probe update -y
+
+# Force check bypassing cache
+probe update -f
 ```
 
-### Server Management
+### CLI Update Notifications
 
-Tray automatically:
-- Spawns `probe serve --quiet` as subprocess
-- Waits for HTTP server to be ready (polls `/api/health`)
-- Updates tooltip: "probeTool - Running"
-- On quit: Sends SIGINT, waits for graceful shutdown
+When an update is cached as available, all CLI commands show a notification:
+
+```
+⚠ Update available: v0.1.5-beta (dev -> v0.1.5-beta)
+  Run probe update to install
+```
+
+### Update Caching
+
+To avoid excessive GitHub API calls:
+
+- Results cached in `update_cache.json`
+- Cache valid for 24 hours
+- Cache cleared after successful update
+
+### Update Process
+
+1. Query GitHub releases API
+2. Compare current version with latest
+3. Download appropriate tar.gz for platform
+4. Extract new binary to temp directory
+5. Backup current binary
+6. Replace with new binary
+7. Clear update cache
+
+### Data Preservation
+
+User data is preserved during updates:
+
+- Configuration: `config.json`
+- Database: `probes/probes.db`
+- Scan reports: `probes/*.md`
+- Agent files: `agent/`
+
+Only the binary is replaced.
 
 ---
 
