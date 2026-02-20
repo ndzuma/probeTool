@@ -4,8 +4,8 @@ package runtime
 
 import "embed"
 
-//go:embed node-*
+//go:embed all:node-*
 var nodeFS embed.FS
 
-//go:embed web
+//go:embed all:web
 var webFS embed.FS

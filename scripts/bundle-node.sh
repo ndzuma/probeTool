@@ -67,9 +67,21 @@ if [ "$PLATFORM" = "windows" ]; then
     cp -r "$EXTRACTED/node_modules" "$OUTPUT_DIR/"
 else
     cp "$EXTRACTED/bin/node" "$OUTPUT_DIR/bin/"
-    cp "$EXTRACTED/bin/npm" "$OUTPUT_DIR/bin/"
-    [ -f "$EXTRACTED/bin/npx" ] && cp "$EXTRACTED/bin/npx" "$OUTPUT_DIR/bin/"
     cp -r "$EXTRACTED/lib" "$OUTPUT_DIR/"
+    
+    cat > "$OUTPUT_DIR/bin/npm" << 'EOF'
+#!/bin/sh
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+exec "$SCRIPT_DIR/node" "$SCRIPT_DIR/../lib/node_modules/npm/bin/npm-cli.js" "$@"
+EOF
+    chmod +x "$OUTPUT_DIR/bin/npm"
+    
+    cat > "$OUTPUT_DIR/bin/npx" << 'EOF'
+#!/bin/sh
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+exec "$SCRIPT_DIR/node" "$SCRIPT_DIR/../lib/node_modules/npm/bin/npx-cli.js" "$@"
+EOF
+    chmod +x "$OUTPUT_DIR/bin/npx"
 fi
 
 echo "✅ Node.js bundled to $OUTPUT_DIR"

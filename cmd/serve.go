@@ -127,10 +127,11 @@ func ensureNextJSReady(nodePath, webPath string) error {
 		if !quietMode {
 			fmt.Println("📦 Installing dependencies...")
 		}
-		cmd := exec.Command(nodePath, npmPath, "install")
+		cmd := exec.Command(npmPath, "install")
 		cmd.Dir = webPath
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
+		cmd.Env = append(os.Environ(), "PATH="+filepath.Dir(nodePath)+":"+os.Getenv("PATH"))
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("npm install failed: %w", err)
 		}
@@ -144,10 +145,11 @@ func ensureNextJSReady(nodePath, webPath string) error {
 		if !quietMode {
 			fmt.Println("🔨 Building Next.js app...")
 		}
-		cmd := exec.Command(nodePath, npmPath, "run", "build")
+		cmd := exec.Command(npmPath, "run", "build")
 		cmd.Dir = webPath
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
+		cmd.Env = append(os.Environ(), "PATH="+filepath.Dir(nodePath)+":"+os.Getenv("PATH"))
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("npm build failed: %w", err)
 		}
@@ -163,9 +165,9 @@ func startNextJS(ctx context.Context, nodePath, webPath string) *exec.Cmd {
 
 	npmPath, _ := runtime.NpmPath()
 
-	cmd := exec.CommandContext(ctx, nodePath, npmPath, "run", "start")
+	cmd := exec.CommandContext(ctx, npmPath, "run", "start")
 	cmd.Dir = webPath
-	cmd.Env = append(os.Environ(), "PORT="+NextJSPort)
+	cmd.Env = append(os.Environ(), "PORT="+NextJSPort, "PATH="+filepath.Dir(nodePath)+":"+os.Getenv("PATH"))
 
 	if err := cmd.Start(); err != nil {
 		fmt.Printf("Failed to start Next.js: %v\n", err)
