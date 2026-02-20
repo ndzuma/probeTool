@@ -68,7 +68,7 @@ jobs:
           go-version: '1.22'
           
       - name: Build binary
-        run: go build -o probe${{ matrix.os == 'windows-latest' && '.exe' || '' }} ./cmd/probe
+        run: go build -tags nodedebug -o probe${{ matrix.os == 'windows-latest' && '.exe' || '' }} ./cmd/probe
         
       - name: Verify binary runs
         run: ./probe${{ matrix.os == 'windows-latest' && '.exe' || '' }} --version || echo "Version command not implemented yet"
