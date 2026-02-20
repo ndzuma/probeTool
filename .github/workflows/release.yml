@@ -148,6 +148,7 @@ jobs:
           ./scripts/bundle-node.sh windows amd64
       
       - name: Bundle web directory
+        shell: bash
         run: |
           cd web && npm ci && npm run build && cd ..
           rm -rf internal/runtime/web
