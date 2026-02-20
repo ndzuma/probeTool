@@ -6,21 +6,27 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 
 	"fyne.io/systray"
 	"github.com/ndzuma/probeTool/internal/process"
+	"github.com/ndzuma/probeTool/internal/updater"
 	"github.com/ndzuma/probeTool/internal/version"
 )
+
+const updateCheckInterval = 4 * time.Hour
 
 type Manager struct {
 	serveCmd     *exec.Cmd
 	menuItems    *MenuItems
 	dashboardURL string
+	updateInfo   *updater.UpdateInfo
+	stopPolling  chan struct{}
 }
 
 type MenuItems struct {
 	openDashboard *systray.MenuItem
-	checkUpdates  *systray.MenuItem
+	update        *systray.MenuItem
 	version       *systray.MenuItem
 	restart       *systray.MenuItem
 	quit          *systray.MenuItem
@@ -29,6 +35,7 @@ type MenuItems struct {
 func New() *Manager {
 	return &Manager{
 		dashboardURL: fmt.Sprintf("http://localhost:%s", process.ServerPort),
+		stopPolling:  make(chan struct{}),
 	}
 }
 
@@ -50,6 +57,8 @@ func (m *Manager) onReady() {
 	}
 
 	go m.handleMenuActions()
+	go m.startUpdatePolling()
+	go m.checkInitialUpdate()
 }
 
 func (m *Manager) buildMenu() {
@@ -60,7 +69,7 @@ func (m *Manager) buildMenu() {
 	}
 	systray.AddSeparator()
 
-	m.menuItems.checkUpdates = systray.AddMenuItem("Check for Updates", "Check if new version is available")
+	m.menuItems.update = systray.AddMenuItem("Check for Updates", "Check if new version is available")
 	systray.AddSeparator()
 
 	versionText := fmt.Sprintf("Version%s%s", strings.Repeat(" ", 15), info.Version)
@@ -77,8 +86,8 @@ func (m *Manager) handleMenuActions() {
 		case <-m.menuItems.openDashboard.ClickedCh:
 			m.openBrowser(m.dashboardURL)
 
-		case <-m.menuItems.checkUpdates.ClickedCh:
-			m.checkForUpdates()
+		case <-m.menuItems.update.ClickedCh:
+			m.handleUpdateClick()
 
 		case <-m.menuItems.restart.ClickedCh:
 			m.restartServer()
@@ -88,6 +97,77 @@ func (m *Manager) handleMenuActions() {
 			return
 		}
 	}
+}
+
+func (m *Manager) handleUpdateClick() {
+	if m.updateInfo != nil && m.updateInfo.HasUpdate {
+		m.runUpdate()
+	} else {
+		m.checkForUpdates()
+	}
+}
+
+func (m *Manager) startUpdatePolling() {
+	ticker := time.NewTicker(updateCheckInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			m.checkForUpdates()
+		case <-m.stopPolling:
+			return
+		}
+	}
+}
+
+func (m *Manager) checkInitialUpdate() {
+	time.Sleep(2 * time.Second)
+	m.checkForUpdates()
+}
+
+func (m *Manager) checkForUpdates() {
+	systray.SetTooltip("probeTool - Checking for updates...")
+
+	info, err := updater.CheckForUpdateCached()
+	if err != nil {
+		systray.SetTooltip("probeTool - Running")
+		return
+	}
+
+	m.updateInfo = info
+
+	if info.HasUpdate {
+		m.menuItems.update.SetTitle("Update Available (" + info.LatestVersion + ")")
+		m.menuItems.update.SetTooltip("Click to install update " + info.LatestVersion)
+		systray.SetTooltip("probeTool - Update available: " + info.LatestVersion)
+	} else {
+		m.menuItems.update.SetTitle("Check for Updates")
+		m.menuItems.update.SetTooltip("Check if new version is available")
+		systray.SetTooltip("probeTool - Running")
+	}
+}
+
+func (m *Manager) runUpdate() {
+	if m.updateInfo == nil || !m.updateInfo.HasUpdate || m.updateInfo.DownloadURL == "" {
+		return
+	}
+
+	systray.SetTooltip("probeTool - Updating...")
+	m.menuItems.update.SetTitle("Updating...")
+	m.menuItems.update.Disable()
+
+	err := updater.DownloadAndInstall(m.updateInfo.DownloadURL)
+	if err != nil {
+		systray.SetTooltip("probeTool - Update failed")
+		m.menuItems.update.SetTitle("Update Failed - Retry")
+		m.menuItems.update.Enable()
+		return
+	}
+
+	m.menuItems.update.SetTitle("Updated - Restart to Apply")
+	m.menuItems.update.Disable()
+	systray.SetTooltip("probeTool - Restart to complete update")
 }
 
 func (m *Manager) startServer() error {
@@ -157,10 +237,8 @@ func (m *Manager) openBrowser(url string) {
 	cmd.Start()
 }
 
-func (m *Manager) checkForUpdates() {
-}
-
 func (m *Manager) onExit() {
+	close(m.stopPolling)
 	m.stopServer()
 	process.RemoveTrayPID()
 }

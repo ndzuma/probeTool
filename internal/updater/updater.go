@@ -21,9 +21,23 @@ import (
 const (
 	githubRepoURL  = "github.com/ndzuma/probeTool"
 	requestTimeout = 30 * time.Second
+	checkInterval  = 24 * time.Hour
+	cacheFileName  = "update_cache.json"
 )
 
 var githubAPIURL = "https://api.github.com/repos/ndzuma/probeTool/releases/latest"
+
+var getCacheFilePath = func() string {
+	return filepath.Join(paths.GetAppDir(), cacheFileName)
+}
+
+type UpdateCache struct {
+	LastCheckTime  time.Time `json:"last_check_time"`
+	HasUpdate      bool      `json:"has_update"`
+	LatestVersion  string    `json:"latest_version"`
+	DownloadURL    string    `json:"download_url"`
+	ReleasePageURL string    `json:"release_page_url"`
+}
 
 type Release struct {
 	TagName string  `json:"tag_name"`
@@ -53,6 +67,103 @@ func getHTTPClient() *http.Client {
 	return &http.Client{
 		Timeout: requestTimeout,
 	}
+}
+
+func ReadCache() (*UpdateCache, error) {
+	cachePath := getCacheFilePath()
+	data, err := os.ReadFile(cachePath)
+	if err != nil {
+		return nil, err
+	}
+
+	var cache UpdateCache
+	if err := json.Unmarshal(data, &cache); err != nil {
+		return nil, err
+	}
+
+	return &cache, nil
+}
+
+func WriteCache(cache *UpdateCache) error {
+	if err := paths.EnsureAppDirs(); err != nil {
+		return err
+	}
+
+	cachePath := getCacheFilePath()
+	data, err := json.MarshalIndent(cache, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(cachePath, data, 0644)
+}
+
+func GetCachedUpdateStatus() *UpdateCache {
+	cache, err := ReadCache()
+	if err != nil {
+		return nil
+	}
+	return cache
+}
+
+func ShouldCheckForUpdate() bool {
+	cache, err := ReadCache()
+	if err != nil {
+		return true
+	}
+
+	return time.Since(cache.LastCheckTime) >= checkInterval
+}
+
+func CheckForUpdateWithCache() (*UpdateInfo, error) {
+	info, err := CheckForUpdate()
+	if err != nil {
+		cache, cacheErr := ReadCache()
+		if cacheErr == nil {
+			return &UpdateInfo{
+				CurrentVersion: version.GetInfo().Version,
+				LatestVersion:  cache.LatestVersion,
+				HasUpdate:      cache.HasUpdate,
+				DownloadURL:    cache.DownloadURL,
+				ReleasePageURL: cache.ReleasePageURL,
+			}, nil
+		}
+		return nil, err
+	}
+
+	cache := &UpdateCache{
+		LastCheckTime:  time.Now(),
+		HasUpdate:      info.HasUpdate,
+		LatestVersion:  info.LatestVersion,
+		DownloadURL:    info.DownloadURL,
+		ReleasePageURL: info.ReleasePageURL,
+	}
+
+	WriteCache(cache)
+
+	return info, nil
+}
+
+func CheckForUpdateCached() (*UpdateInfo, error) {
+	if !ShouldCheckForUpdate() {
+		cache, err := ReadCache()
+		if err == nil {
+			return &UpdateInfo{
+				CurrentVersion: version.GetInfo().Version,
+				LatestVersion:  cache.LatestVersion,
+				HasUpdate:      cache.HasUpdate,
+				DownloadURL:    cache.DownloadURL,
+				ReleasePageURL: cache.ReleasePageURL,
+			}, nil
+		}
+	}
+
+	return CheckForUpdateWithCache()
+}
+
+func ClearCache() error {
+	cachePath := getCacheFilePath()
+	return os.Remove(cachePath)
 }
 
 func FetchLatestRelease() (*Release, error) {
@@ -221,6 +332,7 @@ func DownloadAndInstall(downloadURL string) error {
 	}
 
 	os.Remove(backupPath)
+	ClearCache()
 
 	fmt.Printf("%s %s\n", color.GreenString("✅"), bold("Update installed successfully!"))
 	fmt.Printf("\nYour data is preserved at: %s\n", paths.GetAppDir())

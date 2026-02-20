@@ -7,10 +7,12 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/fatih/color"
 	"github.com/ndzuma/probeTool/internal/db"
 	"github.com/ndzuma/probeTool/internal/paths"
 	"github.com/ndzuma/probeTool/internal/prober"
 	"github.com/ndzuma/probeTool/internal/process"
+	"github.com/ndzuma/probeTool/internal/updater"
 	"github.com/ndzuma/probeTool/internal/version"
 	"github.com/spf13/cobra"
 )
@@ -63,9 +65,28 @@ func Execute() {
 		fmt.Println()
 	}
 
+	showUpdateNotification()
+
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
+	}
+}
+
+func showUpdateNotification() {
+	cache := updater.GetCachedUpdateStatus()
+	if cache != nil && cache.HasUpdate {
+		yellow := color.New(color.FgYellow).SprintFunc()
+		cyan := color.New(color.FgCyan).SprintFunc()
+		bold := color.New(color.Bold).SprintFunc()
+
+		fmt.Printf("\n%s %s %s (%s -> %s)\n",
+			yellow("⚠"),
+			bold("Update available:"),
+			cyan(cache.LatestVersion),
+			version.GetInfo().Version,
+			cache.LatestVersion)
+		fmt.Printf("  Run %s to install\n\n", cyan("probe update"))
 	}
 }
 

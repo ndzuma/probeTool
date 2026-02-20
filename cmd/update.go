@@ -12,8 +12,9 @@ import (
 )
 
 var (
-	checkOnly bool
-	forceYes  bool
+	checkOnly  bool
+	forceYes   bool
+	forceCheck bool
 )
 
 var updateCmd = &cobra.Command{
@@ -32,6 +33,7 @@ func init() {
 	rootCmd.AddCommand(updateCmd)
 	updateCmd.Flags().BoolVar(&checkOnly, "check", false, "Only check for updates, don't install")
 	updateCmd.Flags().BoolVarP(&forceYes, "yes", "y", false, "Skip confirmation prompt")
+	updateCmd.Flags().BoolVarP(&forceCheck, "force", "f", false, "Force check bypassing cache")
 }
 
 func runUpdate() {
@@ -41,7 +43,14 @@ func runUpdate() {
 
 	fmt.Printf("%s Checking for updates...\n\n", yellow("🔍"))
 
-	info, err := updater.CheckForUpdate()
+	var info *updater.UpdateInfo
+	var err error
+
+	if forceCheck {
+		info, err = updater.CheckForUpdate()
+	} else {
+		info, err = updater.CheckForUpdateCached()
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error checking for updates: %v\n", err)
 		os.Exit(1)

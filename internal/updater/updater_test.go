@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ndzuma/probeTool/internal/version"
 )
@@ -461,5 +462,145 @@ func TestGetHTTPClient(t *testing.T) {
 
 	if client.Timeout != requestTimeout {
 		t.Errorf("getHTTPClient().Timeout = %v, want %v", client.Timeout, requestTimeout)
+	}
+}
+
+func TestUpdateCacheStruct(t *testing.T) {
+	cache := UpdateCache{
+		LastCheckTime:  time.Now(),
+		HasUpdate:      true,
+		LatestVersion:  "v1.0.0",
+		DownloadURL:    "https://example.com/probe.tar.gz",
+		ReleasePageURL: "https://github.com/example/repo/releases/tag/v1.0.0",
+	}
+
+	if !cache.HasUpdate {
+		t.Error("UpdateCache.HasUpdate should be true")
+	}
+	if cache.LatestVersion != "v1.0.0" {
+		t.Errorf("UpdateCache.LatestVersion = %s, want v1.0.0", cache.LatestVersion)
+	}
+}
+
+func TestReadCacheNoFile(t *testing.T) {
+	cache, err := ReadCache()
+	if err == nil {
+		t.Error("ReadCache() should return error when no cache file exists")
+	}
+	if cache != nil {
+		t.Error("ReadCache() should return nil cache on error")
+	}
+}
+
+func TestWriteCacheInvalidPath(t *testing.T) {
+	cache := &UpdateCache{
+		LastCheckTime: time.Now(),
+	}
+
+	originalPath := getCacheFilePath
+	getCacheFilePath = func() string {
+		return "/nonexistent/directory/cache.json"
+	}
+	defer func() { getCacheFilePath = originalPath }()
+
+	err := WriteCache(cache)
+	if err == nil {
+		t.Error("WriteCache() should return error for invalid path")
+	}
+}
+
+func TestReadCacheInvalidJSON(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "probe-cache-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	cachePath := filepath.Join(tempDir, cacheFileName)
+	os.WriteFile(cachePath, []byte("invalid json"), 0644)
+
+	originalPath := getCacheFilePath
+	getCacheFilePath = func() string {
+		return cachePath
+	}
+	defer func() { getCacheFilePath = originalPath }()
+
+	cache, err := ReadCache()
+	if err == nil {
+		t.Error("ReadCache() should return error for invalid JSON")
+	}
+	if cache != nil {
+		t.Error("ReadCache() should return nil for invalid JSON")
+	}
+}
+
+func TestShouldCheckForUpdateLogic(t *testing.T) {
+	tests := []struct {
+		name        string
+		checkTime   time.Time
+		shouldCheck bool
+	}{
+		{
+			name:        "no cache time",
+			checkTime:   time.Time{},
+			shouldCheck: true,
+		},
+		{
+			name:        "recent check",
+			checkTime:   time.Now(),
+			shouldCheck: false,
+		},
+		{
+			name:        "old check",
+			checkTime:   time.Now().Add(-48 * time.Hour),
+			shouldCheck: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := time.Since(tt.checkTime) >= checkInterval
+			if result != tt.shouldCheck {
+				t.Errorf("time.Since(checkTime) >= checkInterval = %v, want %v", result, tt.shouldCheck)
+			}
+		})
+	}
+}
+
+func TestGetCachedUpdateStatusNoCache(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "probe-getcached-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	originalPath := getCacheFilePath
+	getCacheFilePath = func() string {
+		return filepath.Join(tempDir, cacheFileName)
+	}
+	defer func() { getCacheFilePath = originalPath }()
+
+	cache := GetCachedUpdateStatus()
+	if cache != nil {
+		t.Error("GetCachedUpdateStatus() should return nil when no cache exists")
+	}
+}
+
+func TestClearCacheNoFile(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "probe-clearcache-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	originalPath := getCacheFilePath
+	getCacheFilePath = func() string {
+		return filepath.Join(tempDir, cacheFileName)
+	}
+	defer func() { getCacheFilePath = originalPath }()
+
+	err = ClearCache()
+	if err == nil {
+		t.Error("ClearCache() should return error when file doesn't exist")
 	}
 }
