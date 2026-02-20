@@ -33,8 +33,19 @@ jobs:
         with:
           node-version: '20'
       
-      - name: Build web
-        run: cd web && npm ci && npm run build
+      - name: Bundle Node.js runtime
+        run: |
+          chmod +x scripts/bundle-node.sh
+          ./scripts/bundle-node.sh darwin ${{ matrix.arch }}
+      
+      - name: Bundle web directory
+        run: |
+          cd web && npm ci && npm run build && cd ..
+          rm -rf internal/runtime/web
+          mkdir -p internal/runtime/web
+          cp -r web/* internal/runtime/web/
+          rm -rf internal/runtime/web/node_modules internal/runtime/web/.next
+
       
       - name: Build binary
         env:
@@ -76,8 +87,19 @@ jobs:
         with:
           node-version: '20'
       
-      - name: Build web
-        run: cd web && npm ci && npm run build
+      - name: Bundle Node.js runtime
+        run: |
+          chmod +x scripts/bundle-node.sh
+          ./scripts/bundle-node.sh darwin ${{ matrix.arch }}
+      
+      - name: Bundle web directory
+        run: |
+          cd web && npm ci && npm run build && cd ..
+          rm -rf internal/runtime/web
+          mkdir -p internal/runtime/web
+          cp -r web/* internal/runtime/web/
+          rm -rf internal/runtime/web/node_modules internal/runtime/web/.next
+
       
       - name: Build binary
         env:
@@ -119,8 +141,19 @@ jobs:
         with:
           node-version: '20'
       
-      - name: Build web
-        run: cd web && npm ci && npm run build
+      - name: Bundle Node.js runtime
+        run: |
+          chmod +x scripts/bundle-node.sh
+          ./scripts/bundle-node.sh darwin ${{ matrix.arch }}
+      
+      - name: Bundle web directory
+        run: |
+          cd web && npm ci && npm run build && cd ..
+          rm -rf internal/runtime/web
+          mkdir -p internal/runtime/web
+          cp -r web/* internal/runtime/web/
+          rm -rf internal/runtime/web/node_modules internal/runtime/web/.next
+
       
       - name: Build binary
         env:

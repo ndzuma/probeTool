@@ -239,3 +239,14 @@ docs/.doctrees/
 *.orig
 *.rej
 .*.swp
+
+# Embedded assets
+internal/assets/web/
+
+# Next.js
+web/.next/
+web/out/
+
+# Bundled runtime
+internal/runtime/node-*/
+internal/runtime/web/

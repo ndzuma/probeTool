@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ndzuma/probeTool/internal/db"
+	"github.com/ndzuma/probeTool/internal/runtime"
 	"github.com/ndzuma/probeTool/internal/server"
 	"github.com/spf13/cobra"
 )
@@ -22,7 +23,6 @@ import (
 const (
 	ServerPort = "37330"
 	NextJSPort = "37331"
-	WebDir     = "web"
 )
 
 var quietMode bool
@@ -30,7 +30,7 @@ var quietMode bool
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Start the probe dashboard server",
-	Long:  `Starts both the API server and Next.js frontend on a single port.`,
+	Long:  `Starts both the API server and Next.js frontend.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		runServe()
 	},
@@ -53,8 +53,19 @@ func runServe() {
 	}
 	defer database.Close()
 
-	webPath := filepath.Join(".", WebDir)
-	if err := ensureNextJSReady(webPath); err != nil {
+	nodePath, err := runtime.NodePath()
+	if err != nil {
+		fmt.Printf("❌ Error loading Node.js runtime: %v\n", err)
+		os.Exit(1)
+	}
+
+	webPath, err := runtime.WebPath()
+	if err != nil {
+		fmt.Printf("❌ Error loading web assets: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := ensureNextJSReady(nodePath, webPath); err != nil {
 		fmt.Printf("❌ Error setting up Next.js: %v\n", err)
 		os.Exit(1)
 	}
@@ -62,7 +73,7 @@ func runServe() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	nextJSCmd := startNextJS(ctx, webPath)
+	nextJSCmd := startNextJS(ctx, nodePath, webPath)
 	if nextJSCmd == nil {
 		fmt.Println("❌ Failed to start Next.js server")
 		os.Exit(1)
@@ -105,15 +116,18 @@ func runServe() {
 	}
 }
 
-func ensureNextJSReady(webPath string) error {
-	buildPath := filepath.Join(webPath, ".next")
+func ensureNextJSReady(nodePath, webPath string) error {
+	npmPath, err := runtime.NpmPath()
+	if err != nil {
+		return err
+	}
 
 	nodeModules := filepath.Join(webPath, "node_modules")
 	if _, err := os.Stat(nodeModules); os.IsNotExist(err) {
 		if !quietMode {
 			fmt.Println("📦 Installing dependencies...")
 		}
-		cmd := exec.Command("npm", "install")
+		cmd := exec.Command(nodePath, npmPath, "install")
 		cmd.Dir = webPath
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -122,6 +136,7 @@ func ensureNextJSReady(webPath string) error {
 		}
 	}
 
+	buildPath := filepath.Join(webPath, ".next")
 	buildInfo, err := os.Stat(buildPath)
 	needsBuild := os.IsNotExist(err) || time.Since(buildInfo.ModTime()) > 24*time.Hour
 
@@ -129,7 +144,7 @@ func ensureNextJSReady(webPath string) error {
 		if !quietMode {
 			fmt.Println("🔨 Building Next.js app...")
 		}
-		cmd := exec.Command("npm", "run", "build")
+		cmd := exec.Command(nodePath, npmPath, "run", "build")
 		cmd.Dir = webPath
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -141,12 +156,14 @@ func ensureNextJSReady(webPath string) error {
 	return nil
 }
 
-func startNextJS(ctx context.Context, webPath string) *exec.Cmd {
+func startNextJS(ctx context.Context, nodePath, webPath string) *exec.Cmd {
 	if !quietMode {
 		fmt.Println("🌐 Starting Next.js server...")
 	}
 
-	cmd := exec.CommandContext(ctx, "npm", "run", "start")
+	npmPath, _ := runtime.NpmPath()
+
+	cmd := exec.CommandContext(ctx, nodePath, npmPath, "run", "start")
 	cmd.Dir = webPath
 	cmd.Env = append(os.Environ(), "PORT="+NextJSPort)
 
