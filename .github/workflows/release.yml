@@ -4,6 +4,10 @@ on:
   push:
     tags:
       - 'v*'
+  pull_request:
+    branches:
+      - main
+      - master
 
 permissions:
   contents: write
@@ -11,11 +15,13 @@ permissions:
 jobs:
   test:
     name: Run Tests
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/test.yml
 
   build-macos:
     name: Build macOS (${{ matrix.arch }})
     needs: test
+    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: macos-latest
     strategy:
       matrix:
@@ -36,7 +42,11 @@ jobs:
       - name: Bundle Node.js runtime
         run: |
           chmod +x scripts/bundle-node.sh
-          ./scripts/bundle-node.sh darwin ${{ matrix.arch }}
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            ./scripts/bundle-node.sh darwin arm64
+          else
+            ./scripts/bundle-node.sh darwin x64
+          fi
       
       - name: Bundle web directory
         run: |
@@ -45,7 +55,6 @@ jobs:
           mkdir -p internal/runtime/web
           cp -r web/* internal/runtime/web/
           rm -rf internal/runtime/web/node_modules internal/runtime/web/.next
-
       
       - name: Build binary
         env:
@@ -53,7 +62,11 @@ jobs:
           GOARCH: ${{ matrix.arch }}
           CGO_ENABLED: 1
         run: |
-          VERSION="${GITHUB_REF#refs/tags/}"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            VERSION="pr-${{ github.event.pull_request.number }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
           COMMIT="${GITHUB_SHA::7}"
           BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           
@@ -73,6 +86,7 @@ jobs:
   build-linux:
     name: Build Linux (amd64)
     needs: test
+    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -99,7 +113,6 @@ jobs:
           mkdir -p internal/runtime/web
           cp -r web/* internal/runtime/web/
           rm -rf internal/runtime/web/node_modules internal/runtime/web/.next
-
       
       - name: Build binary
         env:
@@ -107,7 +120,11 @@ jobs:
           GOARCH: amd64
           CGO_ENABLED: 1
         run: |
-          VERSION="${GITHUB_REF#refs/tags/}"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            VERSION="pr-${{ github.event.pull_request.number }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
           COMMIT="${GITHUB_SHA::7}"
           BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           
@@ -127,6 +144,7 @@ jobs:
   build-windows:
     name: Build Windows (amd64)
     needs: test
+    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -155,7 +173,6 @@ jobs:
           mkdir -p internal/runtime/web
           cp -r web/* internal/runtime/web/
           rm -rf internal/runtime/web/node_modules internal/runtime/web/.next
-
       
       - name: Build binary
         env:
@@ -164,7 +181,11 @@ jobs:
           CGO_ENABLED: 1
         shell: bash
         run: |
-          VERSION="${GITHUB_REF#refs/tags/}"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            VERSION="pr-${{ github.event.pull_request.number }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
           COMMIT="${GITHUB_SHA::7}"
           BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           
@@ -184,6 +205,7 @@ jobs:
   release:
     name: Create Release
     needs: [build-macos, build-linux, build-windows]
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -215,7 +237,6 @@ jobs:
             echo "### 📝 Changes since $PREV_TAG" >> CHANGELOG.md
             echo "" >> CHANGELOG.md
             
-            # Categorize commits
             git log ${PREV_TAG}..${VERSION} --pretty=format:"%s" | \
             while read line; do
               if echo "$line" | grep -qiE "^feat:"; then
@@ -236,6 +257,16 @@ jobs:
           echo "" >> CHANGELOG.md
           echo "**Full Changelog**: https://github.com/ndzuma/probeTool/compare/${PREV_TAG}...${VERSION}" >> CHANGELOG.md
       
+      - name: Check pre-release
+        id: prerelease
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          if echo "$VERSION" | grep -qiE "-(alpha|beta|rc)"; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -246,7 +277,7 @@ jobs:
             artifacts/linux-amd64/*.tar.gz
             artifacts/windows-amd64/*.zip
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
