@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"syscall"
 
 	"github.com/ndzuma/probeTool/internal/process"
 	"github.com/ndzuma/probeTool/internal/tray"
@@ -48,9 +47,7 @@ func runTray() {
 	cmd.Stdin = nil
 	cmd.Stdout = nil
 	cmd.Stderr = nil
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid: true,
-	}
+	startDaemon(cmd)
 
 	if err := cmd.Start(); err != nil {
 		fmt.Printf("Failed to start tray: %v\n", err)

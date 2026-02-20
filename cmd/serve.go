@@ -69,9 +69,7 @@ func startAsDaemon() {
 	cmd.Stdin = nil
 	cmd.Stdout = nil
 	cmd.Stderr = nil
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid: true,
-	}
+	startDaemon(cmd)
 
 	if err := cmd.Start(); err != nil {
 		fmt.Printf("Failed to start server: %v\n", err)
