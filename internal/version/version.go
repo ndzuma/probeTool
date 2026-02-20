@@ -86,7 +86,7 @@ func (i Info) Detailed() string {
 
   %s  %s
   %s  %s`,
-		cyan("🔧"), bold(fmt.Sprintf("probeTool v%s", i.Version)),
+		cyan("🔧"), bold(fmt.Sprintf("probeTool %s", i.Version)),
 		bold("Version:    "), i.Version,
 		bold("Build Date: "), buildDateFormatted,
 		bold("Git Commit: "), i.Commit,
