@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"fyne.io/systray"
+	"github.com/ndzuma/probeTool/internal/process"
 	"github.com/ndzuma/probeTool/internal/version"
 )
 
@@ -27,7 +28,7 @@ type MenuItems struct {
 
 func New() *Manager {
 	return &Manager{
-		dashboardURL: "http://localhost:37330",
+		dashboardURL: fmt.Sprintf("http://localhost:%s", process.ServerPort),
 	}
 }
 
@@ -36,16 +37,16 @@ func (m *Manager) Start() {
 }
 
 func (m *Manager) onReady() {
-	//systray.SetIcon(assets.Icon)
 	systray.SetTitle("Probe")
 	systray.SetTooltip("probeTool - Security Scanner")
 
 	m.buildMenu()
 
-	if err := m.startServer(); err != nil {
-		fmt.Printf("Failed to start server: %v\n", err)
-		systray.Quit()
-		return
+	if !process.IsServerRunning() {
+		if err := m.startServer(); err != nil {
+			systray.Quit()
+			return
+		}
 	}
 
 	go m.handleMenuActions()
@@ -90,16 +91,14 @@ func (m *Manager) handleMenuActions() {
 }
 
 func (m *Manager) startServer() error {
-	fmt.Println("Starting dashboard server...")
-
 	execPath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
 
-	m.serveCmd = exec.Command(execPath, "serve", "--quiet")
-	m.serveCmd.Stdout = os.Stdout
-	m.serveCmd.Stderr = os.Stderr
+	m.serveCmd = exec.Command(execPath, "serve", "--quiet", "--daemon")
+	m.serveCmd.Stdout = nil
+	m.serveCmd.Stderr = nil
 
 	if err := m.serveCmd.Start(); err != nil {
 		return fmt.Errorf("failed to start serve: %w", err)
@@ -112,7 +111,6 @@ func (m *Manager) startServer() error {
 		return err
 	}
 
-	fmt.Printf("Dashboard running at %s\n", m.dashboardURL)
 	systray.SetTooltip("probeTool - Running")
 	return nil
 }
@@ -121,8 +119,6 @@ func (m *Manager) stopServer() error {
 	if m.serveCmd == nil || m.serveCmd.Process == nil {
 		return nil
 	}
-
-	fmt.Println("Stopping dashboard server...")
 
 	if err := m.serveCmd.Process.Signal(os.Interrupt); err != nil {
 		return m.serveCmd.Process.Kill()
@@ -133,19 +129,14 @@ func (m *Manager) stopServer() error {
 }
 
 func (m *Manager) restartServer() {
-	fmt.Println("Restarting server...")
-
 	systray.SetTooltip("probeTool - Restarting...")
 
-	if err := m.stopServer(); err != nil {
-		fmt.Printf("Warning: %v\n", err)
-	}
+	m.stopServer()
 
 	if err := m.startServer(); err != nil {
-		fmt.Printf("Failed to restart: %v\n", err)
 		systray.SetTooltip("probeTool - Server failed to start")
 	} else {
-		systray.SetTooltip("probeTool - Security Scanner")
+		systray.SetTooltip("probeTool - Running")
 	}
 }
 
@@ -160,28 +151,16 @@ func (m *Manager) openBrowser(url string) {
 	case "windows":
 		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
 	default:
-		fmt.Printf("Please open: %s\n", url)
 		return
 	}
 
-	if err := cmd.Start(); err != nil {
-		fmt.Printf("Failed to open browser: %v\n", err)
-		fmt.Printf("Please open: %s\n", url)
-	}
+	cmd.Start()
 }
 
 func (m *Manager) checkForUpdates() {
-	fmt.Println("Update check not implemented yet")
-	info := version.GetInfo()
-	fmt.Printf("Current version: %s\n", info.Version)
 }
 
 func (m *Manager) onExit() {
-	fmt.Println("\nShutting down...")
-
-	if err := m.stopServer(); err != nil {
-		fmt.Printf("Warning during shutdown: %v\n", err)
-	}
-
-	fmt.Println("Goodbye!")
+	m.stopServer()
+	process.RemoveTrayPID()
 }

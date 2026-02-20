@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/ndzuma/probeTool/internal/config"
+	"github.com/ndzuma/probeTool/internal/process"
 )
 
 func TestRootCommandExists(t *testing.T) {
@@ -137,35 +138,76 @@ func TestConfigStruct(t *testing.T) {
 }
 
 func TestRootFlags(t *testing.T) {
-	// Verify root command flags exist
 	flags := rootCmd.Flags()
 
-	// Check for --full flag
 	if flags.Lookup("full") == nil {
 		t.Error("rootCmd should have --full flag")
 	}
 
-	// Check for --quick flag
 	if flags.Lookup("quick") == nil {
 		t.Error("rootCmd should have --quick flag")
 	}
 
-	// Check for --model flag
 	if flags.Lookup("model") == nil {
 		t.Error("rootCmd should have --model flag")
 	}
 
-	// Check for --verbose flag
 	if flags.Lookup("verbose") == nil {
 		t.Error("rootCmd should have --verbose flag")
+	}
+
+	if flags.Lookup("override") == nil {
+		t.Error("rootCmd should have --override flag")
+	}
+}
+
+func TestStopCommandExists(t *testing.T) {
+	cmd, _, err := rootCmd.Find([]string{"stop"})
+	if err != nil {
+		t.Errorf("stop command not found: %v", err)
+	}
+	if cmd == nil {
+		t.Error("stop command should exist")
+	}
+}
+
+func TestTrayCommandExists(t *testing.T) {
+	cmd, _, err := rootCmd.Find([]string{"tray"})
+	if err != nil {
+		t.Errorf("tray command not found: %v", err)
+	}
+	if cmd == nil {
+		t.Error("tray command should exist")
+	}
+}
+
+func TestServeQuietFlag(t *testing.T) {
+	cmd, _, err := rootCmd.Find([]string{"serve"})
+	if err != nil {
+		t.Errorf("serve command not found: %v", err)
+	}
+
+	if cmd.Flags().Lookup("quiet") == nil {
+		t.Error("serve command should have --quiet flag")
+	}
+}
+
+func TestStopAllFlag(t *testing.T) {
+	cmd, _, err := rootCmd.Find([]string{"stop"})
+	if err != nil {
+		t.Errorf("stop command not found: %v", err)
+	}
+
+	if cmd.Flags().Lookup("all") == nil {
+		t.Error("stop command should have --all flag")
 	}
 }
 
 func TestServerConstants(t *testing.T) {
-	if ServerPort != "37330" {
-		t.Errorf("ServerPort = %v, want 37330", ServerPort)
+	if process.ServerPort != "37330" {
+		t.Errorf("ServerPort = %v, want 37330", process.ServerPort)
 	}
-	if NextJSPort != "37331" {
-		t.Errorf("NextJSPort = %v, want 37331", NextJSPort)
+	if process.NextJSPort != "37331" {
+		t.Errorf("NextJSPort = %v, want 37331", process.NextJSPort)
 	}
 }

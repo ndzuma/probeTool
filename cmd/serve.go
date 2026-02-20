@@ -15,17 +15,14 @@ import (
 	"time"
 
 	"github.com/ndzuma/probeTool/internal/db"
+	"github.com/ndzuma/probeTool/internal/process"
 	"github.com/ndzuma/probeTool/internal/runtime"
 	"github.com/ndzuma/probeTool/internal/server"
 	"github.com/spf13/cobra"
 )
 
-const (
-	ServerPort = "37330"
-	NextJSPort = "37331"
-)
-
 var quietMode bool
+var daemonMode bool
 
 var serveCmd = &cobra.Command{
 	Use:   "serve",
@@ -38,35 +35,96 @@ var serveCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(serveCmd)
-	serveCmd.Flags().BoolVar(&quietMode, "quiet", false, "Suppress startup messages")
+	serveCmd.Flags().BoolVar(&quietMode, "quiet", false, "Run in background (daemon mode)")
+	serveCmd.Flags().BoolVar(&daemonMode, "daemon", false, "Run as daemon (internal use)")
 }
 
 func runServe() {
-	if !quietMode {
-		fmt.Println("🚀 Starting Probe Dashboard...")
+	if daemonMode {
+		runDaemon()
+		return
+	}
+
+	if quietMode {
+		startAsDaemon()
+		return
+	}
+
+	runForeground()
+}
+
+func startAsDaemon() {
+	if process.IsServerRunning() {
+		fmt.Println("Server is already running")
+		return
+	}
+
+	execPath, err := os.Executable()
+	if err != nil {
+		fmt.Printf("Error getting executable path: %v\n", err)
+		os.Exit(1)
+	}
+
+	cmd := exec.Command(execPath, "serve", "--daemon")
+	cmd.Stdin = nil
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
+	}
+
+	if err := cmd.Start(); err != nil {
+		fmt.Printf("Failed to start server: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Server started in background")
+	fmt.Println("Use 'probe stop' to stop the server")
+}
+
+func runDaemon() {
+	runForeground()
+}
+
+func runForeground() {
+	if process.IsServerRunning() {
+		if !daemonMode {
+			fmt.Println("Server is already running")
+		}
+		return
+	}
+
+	if err := process.WriteServerPID(os.Getpid()); err != nil {
+		if !daemonMode {
+			fmt.Printf("Warning: could not write PID file: %v\n", err)
+		}
 	}
 
 	database, err := db.InitDB(db.DBPath())
 	if err != nil {
-		fmt.Printf("❌ Error initializing database: %v\n", err)
+		fmt.Printf("Error initializing database: %v\n", err)
+		process.RemoveServerPID()
 		os.Exit(1)
 	}
 	defer database.Close()
 
 	nodePath, err := runtime.NodePath()
 	if err != nil {
-		fmt.Printf("❌ Error loading Node.js runtime: %v\n", err)
+		fmt.Printf("Error loading Node.js runtime: %v\n", err)
+		process.RemoveServerPID()
 		os.Exit(1)
 	}
 
 	webPath, err := runtime.WebPath()
 	if err != nil {
-		fmt.Printf("❌ Error loading web assets: %v\n", err)
+		fmt.Printf("Error loading web assets: %v\n", err)
+		process.RemoveServerPID()
 		os.Exit(1)
 	}
 
 	if err := ensureNextJSReady(nodePath, webPath); err != nil {
-		fmt.Printf("❌ Error setting up Next.js: %v\n", err)
+		fmt.Printf("Error setting up Next.js: %v\n", err)
+		process.RemoveServerPID()
 		os.Exit(1)
 	}
 
@@ -75,7 +133,8 @@ func runServe() {
 
 	nextJSCmd := startNextJS(ctx, nodePath, webPath)
 	if nextJSCmd == nil {
-		fmt.Println("❌ Failed to start Next.js server")
+		fmt.Println("Failed to start Next.js server")
+		process.RemoveServerPID()
 		os.Exit(1)
 	}
 	defer func() {
@@ -84,8 +143,9 @@ func runServe() {
 		}
 	}()
 
-	if !waitForNextJS(NextJSPort, 30*time.Second) {
-		fmt.Println("❌ Next.js server failed to start")
+	if !waitForNextJS(process.NextJSPort, 30*time.Second) {
+		fmt.Println("Next.js server failed to start")
+		process.RemoveServerPID()
 		os.Exit(1)
 	}
 
@@ -96,22 +156,25 @@ func runServe() {
 
 	go func() {
 		<-sigChan
-		fmt.Println("\n🛑 Shutting down gracefully...")
+		if !daemonMode {
+			fmt.Println("\nShutting down gracefully...")
+		}
 		cancel()
 		if nextJSCmd != nil && nextJSCmd.Process != nil {
 			nextJSCmd.Process.Kill()
 		}
+		process.RemoveServerPID()
 		os.Exit(0)
 	}()
 
-	addr := ":" + ServerPort
-	if !quietMode {
-		fmt.Printf("\n✅ Dashboard running at http://localhost:%s\n", ServerPort)
-		fmt.Println("   Press Ctrl+C to stop")
+	if !daemonMode {
+		fmt.Printf("Dashboard running at http://localhost:%s\n", process.ServerPort)
+		fmt.Println("Press Ctrl+C to stop")
 	}
 
-	if err := http.ListenAndServe(addr, mux); err != nil {
-		fmt.Printf("❌ Server error: %v\n", err)
+	if err := http.ListenAndServe(":"+process.ServerPort, mux); err != nil {
+		fmt.Printf("Server error: %v\n", err)
+		process.RemoveServerPID()
 		os.Exit(1)
 	}
 }
@@ -124,8 +187,8 @@ func ensureNextJSReady(nodePath, webPath string) error {
 
 	nodeModules := filepath.Join(webPath, "node_modules")
 	if _, err := os.Stat(nodeModules); os.IsNotExist(err) {
-		if !quietMode {
-			fmt.Println("📦 Installing dependencies...")
+		if !daemonMode {
+			fmt.Println("Installing dependencies...")
 		}
 		cmd := exec.Command(npmPath, "install")
 		cmd.Dir = webPath
@@ -142,8 +205,8 @@ func ensureNextJSReady(nodePath, webPath string) error {
 	needsBuild := os.IsNotExist(err) || time.Since(buildInfo.ModTime()) > 24*time.Hour
 
 	if needsBuild {
-		if !quietMode {
-			fmt.Println("🔨 Building Next.js app...")
+		if !daemonMode {
+			fmt.Println("Building Next.js app...")
 		}
 		cmd := exec.Command(npmPath, "run", "build")
 		cmd.Dir = webPath
@@ -159,18 +222,18 @@ func ensureNextJSReady(nodePath, webPath string) error {
 }
 
 func startNextJS(ctx context.Context, nodePath, webPath string) *exec.Cmd {
-	if !quietMode {
-		fmt.Println("🌐 Starting Next.js server...")
-	}
-
 	npmPath, _ := runtime.NpmPath()
 
 	cmd := exec.CommandContext(ctx, npmPath, "run", "start")
 	cmd.Dir = webPath
-	cmd.Env = append(os.Environ(), "PORT="+NextJSPort, "PATH="+filepath.Dir(nodePath)+":"+os.Getenv("PATH"))
+	cmd.Env = append(os.Environ(), "PORT="+process.NextJSPort, "PATH="+filepath.Dir(nodePath)+":"+os.Getenv("PATH"))
+
+	if daemonMode {
+		cmd.Stdout = nil
+		cmd.Stderr = nil
+	}
 
 	if err := cmd.Start(); err != nil {
-		fmt.Printf("Failed to start Next.js: %v\n", err)
 		return nil
 	}
 
@@ -198,7 +261,7 @@ func waitForNextJS(port string, timeout time.Duration) bool {
 func createUnifiedServer(database *sql.DB) *http.ServeMux {
 	mux := http.NewServeMux()
 
-	nextURL, _ := url.Parse(fmt.Sprintf("http://localhost:%s", NextJSPort))
+	nextURL, _ := url.Parse(fmt.Sprintf("http://localhost:%s", process.NextJSPort))
 	proxy := httputil.NewSingleHostReverseProxy(nextURL)
 
 	server.RegisterRoutes(mux, database)
