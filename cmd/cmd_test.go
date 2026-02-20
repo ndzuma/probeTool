@@ -211,3 +211,24 @@ func TestServerConstants(t *testing.T) {
 		t.Errorf("NextJSPort = %v, want 37331", process.NextJSPort)
 	}
 }
+
+func TestStatusCommandExists(t *testing.T) {
+	cmd, _, err := rootCmd.Find([]string{"status"})
+	if err != nil {
+		t.Errorf("status command not found: %v", err)
+	}
+	if cmd == nil {
+		t.Error("status command should exist")
+	}
+}
+
+func TestTrayWSLCheckFlag(t *testing.T) {
+	cmd, _, err := rootCmd.Find([]string{"tray"})
+	if err != nil {
+		t.Errorf("tray command not found: %v", err)
+	}
+
+	if cmd.Flags().Lookup("skip-wsl-check") == nil {
+		t.Error("tray command should have --skip-wsl-check flag")
+	}
+}
