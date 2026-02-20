@@ -48,7 +48,7 @@ func GetInfo() Info {
 }
 
 func (i Info) String() string {
-	return fmt.Sprintf("probeTool v%s", i.Version)
+	return fmt.Sprintf("probeTool %s", i.Version)
 }
 
 func (i Info) Detailed() string {
@@ -83,7 +83,7 @@ func (i Info) Detailed() string {
   %s  %s
   %s  %s
   %s  %s
-  
+
   %s  %s
   %s  %s`,
 		cyan("🔧"), bold(fmt.Sprintf("probeTool v%s", i.Version)),
