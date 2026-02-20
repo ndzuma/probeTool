@@ -7,104 +7,147 @@ on:
 
 permissions:
   contents: write
-  packages: write
 
 jobs:
   test:
     name: Run Tests
     uses: ./.github/workflows/test.yml
 
-  build:
-    name: Build ${{ matrix.os }}
+  build-macos:
+    name: Build macOS (${{ matrix.arch }})
     needs: test
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
     strategy:
       matrix:
-        include:
-          - os: ubuntu-latest
-            goos: linux
-            goarch: amd64
-          - os: ubuntu-latest
-            goos: linux
-            goarch: arm64
-          - os: macos-latest
-            goos: darwin
-            goarch: amd64
-          - os: macos-latest
-            goos: darwin
-            goarch: arm64
-          - os: windows-latest
-            goos: windows
-            goarch: amd64
-    
+        arch: [amd64, arm64]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.22'
       
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
       
-      - name: Build web frontend
-        run: |
-          cd web
-          npm ci
-          npm run build
+      - name: Build web
+        run: cd web && npm ci && npm run build
       
       - name: Build binary
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
+          GOOS: darwin
+          GOARCH: ${{ matrix.arch }}
           CGO_ENABLED: 1
         run: |
           VERSION="${GITHUB_REF#refs/tags/}"
           COMMIT="${GITHUB_SHA::7}"
           BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           
-          LDFLAGS="-s -w \
+          go build -ldflags "-s -w \
             -X github.com/ndzuma/probeTool/internal/version.Version=${VERSION} \
             -X github.com/ndzuma/probeTool/internal/version.Commit=${COMMIT} \
-            -X github.com/ndzuma/probeTool/internal/version.BuildDate=${BUILD_DATE}"
+            -X github.com/ndzuma/probeTool/internal/version.BuildDate=${BUILD_DATE}" \
+            -o probe ./cmd/probe
           
-          go build -ldflags "${LDFLAGS}" -o probe${{ matrix.goos == 'windows' && '.exe' || '' }} ./cmd/probe
+          tar -czf probeTool_${VERSION}_darwin_${{ matrix.arch }}.tar.gz probe
       
-      - name: Create archive
-        run: |
-          VERSION="${GITHUB_REF#refs/tags/}"
-          ARCHIVE_NAME="probeTool_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}"
-          
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            zip "${ARCHIVE_NAME}.zip" probe.exe
-          else
-            tar -czf "${ARCHIVE_NAME}.tar.gz" probe
-          fi
-      
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: probeTool-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: probeTool_*
+          name: macos-${{ matrix.arch }}
+          path: "*.tar.gz"
 
-  release:
-    name: Create Release
-    needs: build
+  build-linux:
+    name: Build Linux (amd64)
+    needs: test
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       
-      - name: Download all artifacts
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Build web
+        run: cd web && npm ci && npm run build
+      
+      - name: Build binary
+        env:
+          GOOS: linux
+          GOARCH: amd64
+          CGO_ENABLED: 1
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          COMMIT="${GITHUB_SHA::7}"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          
+          go build -ldflags "-s -w \
+            -X github.com/ndzuma/probeTool/internal/version.Version=${VERSION} \
+            -X github.com/ndzuma/probeTool/internal/version.Commit=${COMMIT} \
+            -X github.com/ndzuma/probeTool/internal/version.BuildDate=${BUILD_DATE}" \
+            -o probe ./cmd/probe
+          
+          tar -czf probeTool_${VERSION}_linux_amd64.tar.gz probe
+      
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-amd64
+          path: "*.tar.gz"
+
+  build-windows:
+    name: Build Windows (amd64)
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Build web
+        run: cd web && npm ci && npm run build
+      
+      - name: Build binary
+        env:
+          CGO_ENABLED: 1
+        run: |
+          $VERSION = $env:GITHUB_REF -replace 'refs/tags/', ''
+          $COMMIT = $env:GITHUB_SHA.Substring(0,7)
+          $BUILD_DATE = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+          
+          go build -ldflags "-s -w -X github.com/ndzuma/probeTool/internal/version.Version=$VERSION -X github.com/ndzuma/probeTool/internal/version.Commit=$COMMIT -X github.com/ndzuma/probeTool/internal/version.BuildDate=$BUILD_DATE" -o probe.exe ./cmd/probe
+          Compress-Archive -Path probe.exe -DestinationPath "probeTool_${VERSION}_windows_amd64.zip"
+      
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-amd64
+          path: "*.zip"
+
+  release:
+    name: Create Release
+    needs: [build-macos, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: dist
@@ -112,14 +155,19 @@ jobs:
       - name: Flatten artifacts
         run: |
           mkdir -p release
-          find dist -type f -name "probeTool_*" -exec mv {} release/ \;
+          find dist -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec mv {} release/ \;
+          ls -la release/
+      
+      - name: Generate checksums
+        run: |
+          cd release
+          shasum -a 256 * > checksums.txt
       
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: release/*
           draft: false
-          prerelease: false
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
