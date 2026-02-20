@@ -56,7 +56,11 @@ func RunProbe(ctx context.Context, args ProbeArgs) (string, error) {
 
 	cfg, err := config.Load()
 	if err != nil {
-		return "", fmt.Errorf("config load failed: %w\nRun: probe config add-provider openrouter", err)
+		return "", fmt.Errorf("config load failed: %w", err)
+	}
+
+	if len(cfg.Providers) == 0 {
+		return "", fmt.Errorf("no provider configured\n\nFirst, add a provider:\n  probe config add-provider openrouter\n\nYou will be prompted for your API key and model preferences.")
 	}
 
 	provider := args.Provider
@@ -64,7 +68,10 @@ func RunProbe(ctx context.Context, args ProbeArgs) (string, error) {
 		if cfg.Default != "" {
 			provider = cfg.Default
 		} else {
-			provider = "openrouter"
+			for name := range cfg.Providers {
+				provider = name
+				break
+			}
 		}
 	}
 
