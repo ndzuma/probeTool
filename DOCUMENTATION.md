@@ -169,9 +169,12 @@ Tray stops server gracefully
 |---------|------|-------------|
 | `probe` | `root.go` | Run security scan (default command) |
 | `probe serve` | `serve.go` | Start dashboard HTTP server only |
+| `probe serve --quiet` | `serve.go` | Start server as background daemon (no browser) |
 | `probe tray` | `tray.go` | Launch system tray (includes server) |
+| `probe stop` | `stop.go` | Stop running server daemon |
+| `probe status` | `status.go` | Show server/tray status with PIDs |
 | `probe config` | `config.go` | Manage API provider configuration |
-| `probe setup` | `setup.go` | Install agent files |
+| `probe setup` | `setup.go` | Install agent files from bundled archive |
 | `probe clean` | `clean.go` | Clean scan reports |
 | `probe migrate` | `migrate.go` | Migrate config to new location |
 | `probe version` | `version.go` | Show version information |
@@ -191,9 +194,17 @@ Tray stops server gracefully
 
 ### Agent (`agent/`)
 
-**Files:**
+**Bundled Files:**
+
+Agent files are embedded in the probeTool binary for easy distribution:
 - `probe-runner.js` - Main scanner entrypoint
 - `prompts.js` - AI prompt templates
+- `package.json` - Node dependencies
+- `.claude/` - AI context files
+
+On first run, `probe setup` automatically extracts these to:
+- **macOS/Linux:** `~/.../probeTool/agent/`
+- **Windows (WSL):** `%APPDATA%\probeTool\agent\`
 
 **Process:**
 1. Parse command-line arguments
@@ -203,6 +214,12 @@ Tray stops server gracefully
 5. Parse AI response
 6. Generate markdown report
 7. Save to specified output path
+
+**Manual Setup:**
+```bash
+# Manually install agent files
+probe setup
+```
 
 **Environment Variables:**
 - `ANTHROPIC_AUTH_TOKEN` - API key
@@ -537,7 +554,121 @@ Tray automatically:
 
 ---
 
+## WSL (Windows Subsystem for Linux)
+
+### Auto-Detection
+
+On Linux systems, probeTool automatically detects if you're running under WSL:
+- Checks `/proc/version` for WSL markers
+- On first run with WSL detected, prompts user for system tray preference
+- Saves preference to avoid repeated prompts
+
+### WSL on Windows
+
+**Important:** Windows native builds have issues. Use WSL instead:
+
+1. **Install WSL2:**
+   ```bash
+   wsl --install -d Ubuntu
+   ```
+
+2. **Inside WSL terminal:**
+   ```bash
+   curl -sSL https://raw.githubusercontent.com/ndzuma/probeTool/main/install.sh | bash
+   probe config add-provider openrouter
+   probe tray
+   ```
+
+3. **Access dashboard:**
+   - From WSL: `http://localhost:37330`
+   - From Windows: `http://127.0.0.1:37330` or WSL IP address
+   - WSL hostname: `hostname -I` shows available IPs
+
+### System Tray on WSL
+
+- Tray doesn't render in WSL terminal directly
+- Use with `--quiet` flag to run in background:
+  ```bash
+  probe serve --quiet &
+  ```
+- Access dashboard from Windows browser at WSL IP:37330
+- Or use `probe stop` to gracefully shut down
+
+---
+
+## New Status Command
+
+### `probe status`
+
+Shows the current state of server and tray processes.
+
+**Usage:**
+```bash
+probe status
+```
+
+**Output:**
+```
+probeTool Status
+================
+Server:  running (PID: 12345)
+Tray:    not running
+Reports: 5
+```
+
+**Exit codes:**
+- `0` - Server running
+- `1` - Server not running
+- `2` - Error checking status
+
+---
+
+## Process Management
+
+### PID Files
+
+probeTool tracks daemon processes using PID files:
+
+- **Server PID:** `~/.../probeTool/.probe/server.pid`
+- **Tray PID:** `~/.../probeTool/.probe/tray.pid`
+
+These allow graceful shutdown and status checking.
+
+### Daemon Spawning
+
+Platform-specific daemon behavior:
+
+- **Unix/macOS/Linux:** Uses `Setsid()` to detach from parent process
+- **Windows:** Uses `CREATE_NEW_PROCESS_GROUP` flag (not recommended, use WSL)
+
+### Graceful Shutdown
+
+**Stop commands:**
+```bash
+# Stop server daemon
+probe stop
+
+# Or manually
+kill $(cat ~/.../probeTool/.probe/server.pid)
+
+# Force kill all probe processes
+pkill probe
+```
+
+---
+
+---
+
 ## Troubleshooting
+
+### Windows Issues
+
+**Note:** Windows native build is not working correctly. Please use WSL instead.
+
+**Solution:**
+1. Install WSL2 and Ubuntu
+2. Run probeTool inside WSL terminal
+3. Access dashboard from Windows browser at WSL IP:37330
 
 ### Port Already in Use
 
@@ -583,7 +714,7 @@ probe serve
 probe setup
 ```
 
-This installs Node.js agent files to `~/.../probeTool/agent/`.
+Agent files are bundled with probeTool and installed to `~/.../probeTool/agent/`.
 
 ### Migration Issues
 
@@ -607,9 +738,10 @@ rm -rf ~/.probe
 
 - **Linux:**
   - Install `libappindicator` or `libayatana-appindicator`
+  - Check if running under WSL (auto-detected)
 
 - **Windows:**
-  - Check system tray settings
+  - Use WSL instead of native Windows
 
 ### API Key Not Working
 
@@ -623,6 +755,20 @@ probe config set-key openrouter sk-...
 
 # Test scan
 probe --quick --verbose
+```
+
+### Server Won't Start
+
+Check logs:
+```bash
+# Kill existing server
+probe stop
+
+# Check for port conflicts
+lsof -ti:37330
+
+# Try again with verbose output
+probe serve --verbose
 ```
 
 ---

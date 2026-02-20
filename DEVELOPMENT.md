@@ -12,7 +12,13 @@ probeTool/
 │   ├── root.go              # Main scan command
 │   ├── serve.go             # Dashboard server
 │   ├── tray.go              # System tray (includes server)
-│   └── config.go            # Configuration
+│   ├── stop.go              # Stop daemon
+│   ├── status.go            # Check daemon status
+│   ├── setup.go             # Install agent files
+│   ├── config.go            # Configuration
+│   ├── daemon_unix.go       # Unix daemon spawning
+│   ├── daemon_windows.go    # Windows daemon spawning
+│   └── ...
 ├── internal/
 │   ├── config/              # Provider management
 │   ├── db/                  # SQLite operations
@@ -20,10 +26,16 @@ probeTool/
 │   ├── server/              # HTTP routes
 │   ├── tray/                # System tray logic
 │   ├── paths/               # OS-specific paths
+│   ├── process/             # PID file management
+│   ├── wsl/                 # WSL detection
+│   ├── agent/               # Bundled agent extraction
+│   ├── runtime/             # Bundled runtime extraction
 │   └── version/             # Version info
 ├── agent/
 │   ├── probe-runner.js      # AI scanner
-│   └── prompts.js           # AI prompts
+│   ├── prompts.js           # AI prompts
+│   ├── package.json         # Dependencies
+│   └── .claude/             # AI context
 └── web/                     # Next.js dashboard
     ├── app/                 # Pages
     └── components/          # React components
@@ -91,6 +103,10 @@ User views at http://localhost:37330/probes/{id}
 
 ```text
 User: probe tray
+  ↓
+Check if running on WSL
+  ├─ YES: Prompt user for tray preference (cache choice)
+  └─ NO: Continue with tray
   ↓
 Tray registers system tray icon
   ↓
@@ -215,6 +231,18 @@ Get version information.
 
 Get file tree for scanned directory.
 
+### `GET /api/health`
+
+Health check endpoint (used by tray to detect server readiness).
+
+**Response:**
+
+```json
+{
+  "status": "ok"
+}
+```
+
 ---
 
 ## Database Schema
@@ -265,6 +293,70 @@ CREATE TABLE findings (
   },
   "default": "openrouter"
 }
+```
+
+---
+
+## Bundled Agent and Runtime
+
+### Agent Embedding
+
+Agent files are embedded in the binary using Go's `embed` package:
+
+**Files in `internal/agent/files/`:**
+- `probe-runner.js` - Main scanner
+- `prompts.js` - AI prompts
+- `package.json` - Dependencies
+- `.claude/skills/security-audit/` - AI context
+
+**Build tags:**
+- Default: Files embedded with full context
+- `nodedebug`: Stub implementation for development without full files
+
+### Extraction Process
+
+On first run, `probe setup`:
+1. Extracts bundled tar.gz archive
+2. Saves to `~/.../probeTool/agent/`
+3. Runs `npm install` if needed
+
+**Files:**
+- `internal/agent/embed.go` - Embedding directives
+- `internal/agent/embed_stub.go` - Debug stub
+- `internal/agent/agent.go` - Extraction logic
+
+### Runtime Embedding
+
+Similarly, Next.js dashboard is pre-built and embedded:
+- `internal/runtime/embed.go` - Dashboard files
+- `internal/runtime/runtime.go` - Serving logic
+
+---
+
+## Process Management
+
+### Daemon Spawning
+
+**Unix/macOS/Linux:**
+- `cmd/daemon_unix.go` - Uses `Setsid()` to detach
+- Process persists after parent exits
+
+**Windows:**
+- `cmd/daemon_windows.go` - Uses `CREATE_NEW_PROCESS_GROUP`
+- Not recommended - use WSL instead
+
+### PID Tracking
+
+**Packages:**
+- `internal/process/` - PID file management
+- `server.pid` - Server process ID
+- `tray.pid` - Tray process ID
+
+**Usage:**
+```go
+pidFile := process.GetPIDFile("server")
+process.WritePID(pidFile, os.Getpid())
+pid := process.ReadPID(pidFile)
 ```
 
 ---

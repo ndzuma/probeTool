@@ -5,6 +5,14 @@
 [![Release](https://img.shields.io/github/v/release/ndzuma/probeTool)](https://github.com/ndzuma/probeTool/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+## ⚠️ Windows Notice
+
+**The Windows build is not working correctly.** Users should use WSL (Windows Subsystem for Linux) instead. Anyone else using Windows does so at their own risk.
+
+[See DOCUMENTATION.md](#troubleshooting) for WSL setup instructions.
+
+---
+
 ## Features
 
 - 🔍 **AI-Powered Scanning** - Automated security analysis using Claude AI
@@ -132,8 +140,11 @@ probe serve
 probe                     Run a security scan (default: full)
 probe tray                Launch system tray (includes dashboard server)
 probe serve               Start dashboard server only
+probe serve --quiet       Start server as background daemon
+probe stop                Stop running server daemon
+probe status              Show server/tray status with PIDs
 probe config              Manage configuration
-probe setup               Install agent files
+probe setup               Install agent files (runs automatically on first use)
 probe clean               Clean scan reports
 probe migrate             Migrate config to new location
 probe version             Show version information
