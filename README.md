@@ -25,6 +25,17 @@
 
 ---
 
+## Screenshots
+
+| Dashboard | System Tray |
+|-----------|-------------|
+| ![Dashboard](assets/dashboard.png) | ![Tray](assets/tray-menu.png) |
+
+### CLI
+![CLI in action](assets/cli.png)
+
+---
+
 ## Installation
 
 ### Quick Install (macOS/Linux)
