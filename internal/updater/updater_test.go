@@ -618,6 +618,55 @@ func TestClearCacheNoFile(t *testing.T) {
 	}
 }
 
+func TestVerifyBinary(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "probe-verify-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	tests := []struct {
+		name      string
+		content   []byte
+		shouldErr bool
+	}{
+		{"ELF binary", []byte{0x7f, 'E', 'L', 'F', 0, 0, 0, 0}, false},
+		{"Mach-O 64-bit LE", []byte{0xcf, 0xfa, 0xed, 0xfe, 0, 0, 0, 0}, false},
+		{"Mach-O 32-bit LE", []byte{0xce, 0xfa, 0xed, 0xfe, 0, 0, 0, 0}, false},
+		{"Mach-O 64-bit BE", []byte{0xfe, 0xed, 0xfa, 0xcf, 0, 0, 0, 0}, false},
+		{"Mach-O 32-bit BE", []byte{0xfe, 0xed, 0xfa, 0xce, 0, 0, 0, 0}, false},
+		{"Fat binary", []byte{0xca, 0xfe, 0xba, 0xbe, 0, 0, 0, 0}, false},
+		{"Windows PE", []byte{'M', 'Z', 0, 0, 0, 0, 0, 0}, false},
+		{"invalid - too short", []byte{0x7f}, true},
+		{"invalid - text", []byte("hello"), true},
+		{"invalid - random", []byte{0x00, 0x01, 0x02, 0x03}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			binaryPath := filepath.Join(tempDir, strings.ReplaceAll(tt.name, " ", "_"))
+			if err := os.WriteFile(binaryPath, tt.content, 0644); err != nil {
+				t.Fatalf("Failed to write test file: %v", err)
+			}
+
+			err := verifyBinary(binaryPath)
+			if tt.shouldErr && err == nil {
+				t.Errorf("verifyBinary() should return error for %s", tt.name)
+			}
+			if !tt.shouldErr && err != nil {
+				t.Errorf("verifyBinary() returned unexpected error for %s: %v", tt.name, err)
+			}
+		})
+	}
+}
+
+func TestVerifyBinaryNonexistent(t *testing.T) {
+	err := verifyBinary("/nonexistent/file")
+	if err == nil {
+		t.Error("verifyBinary() should return error for nonexistent file")
+	}
+}
+
 func TestIsVersionNewer(t *testing.T) {
 	tests := []struct {
 		name     string

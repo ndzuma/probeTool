@@ -374,6 +374,14 @@ func DownloadAndInstall(downloadURL string) error {
 		return fmt.Errorf("failed to extract binary: %w", err)
 	}
 
+	if err := os.Chmod(newBinaryPath, 0755); err != nil {
+		return fmt.Errorf("failed to set executable permissions: %w", err)
+	}
+
+	if err := verifyBinary(newBinaryPath); err != nil {
+		return fmt.Errorf("binary verification failed: %w", err)
+	}
+
 	fmt.Printf("%s Installing update...\n", yellow("🔧"))
 	fmt.Printf("  Current binary: %s\n", cyan(currentExecPath))
 
@@ -388,6 +396,10 @@ func DownloadAndInstall(downloadURL string) error {
 		return fmt.Errorf("failed to install new binary: %w", err)
 	}
 
+	if err := os.Chmod(currentExecPath, 0755); err != nil {
+		return fmt.Errorf("failed to set executable permissions: %w", err)
+	}
+
 	os.Remove(backupPath)
 	ClearCache()
 
@@ -396,6 +408,44 @@ func DownloadAndInstall(downloadURL string) error {
 	fmt.Printf("Run 'probe version' to verify the update.\n")
 
 	return nil
+}
+
+func verifyBinary(path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	buf := make([]byte, 4)
+	n, err := file.Read(buf)
+	if err != nil || n < 4 {
+		return fmt.Errorf("failed to read binary header")
+	}
+
+	if buf[0] == 0x7f && buf[1] == 'E' && buf[2] == 'L' && buf[3] == 'F' {
+		return nil
+	}
+	if buf[0] == 0xcf && buf[1] == 0xfa && buf[2] == 0xed && buf[3] == 0xfe {
+		return nil
+	}
+	if buf[0] == 0xce && buf[1] == 0xfa && buf[2] == 0xed && buf[3] == 0xfe {
+		return nil
+	}
+	if buf[0] == 0xfe && buf[1] == 0xed && buf[2] == 0xfa && buf[3] == 0xcf {
+		return nil
+	}
+	if buf[0] == 0xfe && buf[1] == 0xed && buf[2] == 0xfa && buf[3] == 0xce {
+		return nil
+	}
+	if buf[0] == 0xca && buf[1] == 0xfe && buf[2] == 0xba && buf[3] == 0xbe {
+		return nil
+	}
+	if buf[0] == 'M' && buf[1] == 'Z' {
+		return nil
+	}
+
+	return fmt.Errorf("invalid binary format")
 }
 
 func checkWritePermission(path string) error {
